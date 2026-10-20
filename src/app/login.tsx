@@ -1,4 +1,6 @@
+import { supabase } from '@/lib/supabase';
 import { colors } from '@/styles/global';
+import { Image } from 'expo-image';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -9,8 +11,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  View,
 } from 'react-native';
-import { supabase } from '@/lib/supabase';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -46,69 +48,111 @@ export default function LoginScreen() {
     }
   }
 
+  async function forgotPassword() {
+    if (!email.trim()) {
+      Alert.alert('Enter your email', 'Type your email above, then tap Forgot password again.');
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+    if (error) Alert.alert('Could not send reset email', error.message);
+    else Alert.alert('Check your inbox', 'We sent you a password reset link.');
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Text style={styles.title}>Welcome</Text>
-      <TextInput
-        placeholder='Email'
-        placeholderTextColor={colors.textSecondary}
-        autoCapitalize='none'
-        autoComplete='email'
-        keyboardType='email-address'
-        value={email}
-        onChangeText={setEmail}
-        style={styles.input}
-      />
-      <TextInput
-        placeholder='Password'
-        placeholderTextColor={colors.textSecondary}
-        secureTextEntry
-        autoComplete='password'
-        value={password}
-        onChangeText={setPassword}
-        style={styles.input}
-      />
-      {busy ? (
-        <ActivityIndicator color={colors.primary} />
-      ) : (
-        <>
-          <Pressable style={styles.primary} onPress={() => run('signIn')}>
-            <Text style={styles.primaryText}>Sign in</Text>
+      <Image source={require('../../assets/images/ease-logo.png')} style={styles.logo} contentFit='contain' />
+      <View style={styles.card}>
+        <Text style={styles.label}>Email</Text>
+        <TextInput
+          placeholder='please enter your email'
+          placeholderTextColor={PLACEHOLDER}
+          autoCapitalize='none'
+          autoComplete='email'
+          keyboardType='email-address'
+          value={email}
+          onChangeText={setEmail}
+          style={styles.input}
+        />
+        <Text style={styles.label}>Password</Text>
+        <TextInput
+          placeholder='please enter your password'
+          placeholderTextColor={PLACEHOLDER}
+          secureTextEntry
+          autoComplete='password'
+          value={password}
+          onChangeText={setPassword}
+          style={styles.input}
+        />
+        {busy ? (
+          <ActivityIndicator color={DARK} style={styles.spinner} />
+        ) : (
+          <Pressable style={styles.button} onPress={() => run('signIn')}>
+            <Text style={styles.buttonText}>Log in</Text>
           </Pressable>
-          <Pressable onPress={() => run('signUp')}>
-            <Text style={styles.link}>Create account</Text>
-          </Pressable>
-        </>
-      )}
+        )}
+        <Pressable onPress={forgotPassword} style={styles.linkWrap}>
+          <Text style={styles.link}>Forgot password?</Text>
+        </Pressable>
+        <Pressable onPress={() => run('signUp')} style={styles.linkWrap}>
+          <Text style={styles.link}>New Here?</Text>
+        </Pressable>
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
+const DARK = '#1a1a1a';
+const PLACEHOLDER = '#b5b5b5';
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-    gap: 12,
+    paddingTop: 160,
+    paddingHorizontal: 20,
     backgroundColor: colors.background,
   },
-  title: { fontSize: 28, fontWeight: 'bold', color: colors.text, marginBottom: 12 },
+  logo: {
+    width: 240,
+    aspectRatio: 317 / 79,
+    alignSelf: 'center',
+    marginBottom: 48,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#d9d9d9',
+    borderRadius: 10,
+    padding: 24,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  label: { fontSize: 16, color: '#1a1a1a', marginBottom: 8 },
   input: {
     borderWidth: 1,
-    borderColor: colors.textSecondary,
+    borderColor: '#d9d9d9',
     borderRadius: 8,
-    padding: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    fontSize: 16,
     color: colors.text,
+    marginBottom: 20,
   },
-  primary: {
-    backgroundColor: colors.primary,
+  button: {
+    backgroundColor: "black",
     borderRadius: 8,
-    padding: 14,
+    paddingVertical: 10,
     alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 20,
   },
-  primaryText: { color: colors.text, fontWeight: '600' },
-  link: { color: colors.primary, textAlign: 'center', marginTop: 4 },
+  buttonText: { color: '#FFFFFF', fontSize: 16 },
+  spinner: { paddingVertical: 10, marginTop: 4, marginBottom: 20 },
+  linkWrap: { alignSelf: 'flex-start', marginBottom: 8 },
+  link: { fontSize: 16, color: '#1a1a1a', textDecorationLine: 'underline' },
 });
