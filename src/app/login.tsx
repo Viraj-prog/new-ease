@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/styles/global';
 import { Image } from 'expo-image';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -27,22 +28,15 @@ export default function LoginScreen() {
     return true;
   }
 
-  async function run(action: 'signIn' | 'signUp') {
+  async function signIn() {
     if (!validate()) return;
     setBusy(true);
     try {
-      const credentials = { email: email.trim(), password };
-      if (action === 'signIn') {
-        const { error } = await supabase.auth.signInWithPassword(credentials);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase.auth.signUp(credentials);
-        if (error) throw error;
-        if (!data.session) Alert.alert('Almost there', 'Check your inbox to confirm your email.');
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) throw error;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong. Try again.';
-      Alert.alert(action === 'signIn' ? 'Login failed' : 'Sign up failed', message);
+      Alert.alert('Login failed', message);
     } finally {
       setBusy(false);
     }
@@ -63,7 +57,7 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Image source={require('../../assets/images/ease-logo.png')} style={styles.logo} contentFit='contain' />
+      <Image source={require('../../assets/images/ease-logo-tiny.png')} style={styles.logo} contentFit='contain' />
       <View style={styles.card}>
         <Text style={styles.label}>Email</Text>
         <TextInput
@@ -89,14 +83,14 @@ export default function LoginScreen() {
         {busy ? (
           <ActivityIndicator color={DARK} style={styles.spinner} />
         ) : (
-          <Pressable style={styles.button} onPress={() => run('signIn')}>
+          <Pressable style={styles.button} onPress={signIn}>
             <Text style={styles.buttonText}>Log in</Text>
           </Pressable>
         )}
         <Pressable onPress={forgotPassword} style={styles.linkWrap}>
           <Text style={styles.link}>Forgot password?</Text>
         </Pressable>
-        <Pressable onPress={() => run('signUp')} style={styles.linkWrap}>
+        <Pressable onPress={() => router.push('/signup')} style={styles.linkWrap}>
           <Text style={styles.link}>New Here?</Text>
         </Pressable>
       </View>
@@ -110,15 +104,17 @@ const PLACEHOLDER = '#b5b5b5';
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 160,
+    paddingTop: 123,
     paddingHorizontal: 20,
     backgroundColor: colors.background,
   },
   logo: {
-    width: 240,
-    aspectRatio: 317 / 79,
+    // The image has transparent padding; these values keep the visible mark ~178px wide
+    // and in the same spot as the old full-size logo.
+    width: 348,
+    aspectRatio: 444 / 177,
     alignSelf: 'center',
-    marginBottom: 48,
+    marginBottom: 13,
   },
   card: {
     backgroundColor: '#FFFFFF',
