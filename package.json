@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~57.0.19",
+    "@gorhom/bottom-sheet": "^5.2.14",
     "@maplibre/maplibre-react-native": "^11.4.0",
+    "@react-navigation/drawer": "^7.14.4",
     "@stadiamaps/api": "^9.1.0",
     "@supabase/supabase-js": "^2.117.3",
     "expo": "~57.0.24",
