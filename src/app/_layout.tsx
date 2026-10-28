@@ -1,6 +1,6 @@
 import { AuthProvider, useAuth } from '@/lib/auth';
-import * as SplashScreen from 'expo-splash-screen';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -13,7 +13,7 @@ function RootNavigator() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={!!session}>
-        <Stack.Screen name='(tabs)' />
+        <Stack.Screen name='(drawer)' />
       </Stack.Protected>
       <Stack.Protected guard={!session}>
         <Stack.Screen name='login' />

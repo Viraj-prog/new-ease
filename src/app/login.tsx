@@ -12,10 +12,12 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
 export default function LoginScreen() {
+  const { height } = useWindowDimensions();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -42,22 +44,16 @@ export default function LoginScreen() {
     }
   }
 
-  async function forgotPassword() {
-    if (!email.trim()) {
-      Alert.alert('Enter your email', 'Type your email above, then tap Forgot password again.');
-      return;
-    }
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
-    if (error) Alert.alert('Could not send reset email', error.message);
-    else Alert.alert('Check your inbox', 'We sent you a password reset link.');
-  }
-
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { paddingTop: height * 0.2 }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Image source={require('../../assets/images/ease-logo-tiny.png')} style={styles.logo} contentFit='contain' />
+      <Image
+        source={require('../../assets/images/ease-logo-white.png')}
+        style={styles.logo}
+        contentFit='contain'
+      />
       <View style={styles.card}>
         <Text style={styles.label}>Email</Text>
         <TextInput
@@ -81,74 +77,71 @@ export default function LoginScreen() {
           style={styles.input}
         />
         {busy ? (
-          <ActivityIndicator color={DARK} style={styles.spinner} />
+          <ActivityIndicator color={colors.brand} style={styles.spinner} />
         ) : (
           <Pressable style={styles.button} onPress={signIn}>
             <Text style={styles.buttonText}>Log in</Text>
           </Pressable>
         )}
-        <Pressable onPress={forgotPassword} style={styles.linkWrap}>
-          <Text style={styles.link}>Forgot password?</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/signup')} style={styles.linkWrap}>
-          <Text style={styles.link}>New Here?</Text>
-        </Pressable>
+
+        <View style={styles.signupRow}>
+          <Text style={styles.signupText}>Don't have an account? </Text>
+          <Pressable onPress={() => router.push('/signup')} hitSlop={8}>
+            <Text style={styles.signupLink}>Sign up</Text>
+          </Pressable>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const DARK = '#1a1a1a';
 const PLACEHOLDER = '#b5b5b5';
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 123,
     paddingHorizontal: 20,
-    backgroundColor: colors.background,
+    backgroundColor: colors.brand,
   },
   logo: {
-    // The image has transparent padding; these values keep the visible mark ~178px wide
-    // and in the same spot as the old full-size logo.
-    width: 348,
-    aspectRatio: 444 / 177,
+    width: 230,
+    aspectRatio: 951 / 237,
     alignSelf: 'center',
-    marginBottom: 13,
+    marginBottom: 36,
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#d9d9d9',
     borderRadius: 10,
-    padding: 24,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
   },
-  label: { fontSize: 16, color: '#1a1a1a', marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: '600', color: '#1a1a1a', marginBottom: 6 },
   input: {
     borderWidth: 1,
     borderColor: '#d9d9d9',
     borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    fontSize: 16,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    fontSize: 14,
     color: colors.text,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   button: {
-    backgroundColor: "black",
-    borderRadius: 8,
+    backgroundColor: colors.brand,
+    borderRadius: 20,
     paddingVertical: 10,
     alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 20,
+    marginTop: 2,
   },
-  buttonText: { color: '#FFFFFF', fontSize: 16 },
-  spinner: { paddingVertical: 10, marginTop: 4, marginBottom: 20 },
-  linkWrap: { alignSelf: 'flex-start', marginBottom: 8 },
-  link: { fontSize: 16, color: '#1a1a1a', textDecorationLine: 'underline' },
+  buttonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '500' },
+  spinner: { paddingVertical: 10, marginTop: 2 },
+  signupRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 28 },
+  signupText: { fontSize: 12, color: '#9a9a9a' },
+  signupLink: { fontSize: 12, color: colors.brand, fontWeight: '600' },
 });

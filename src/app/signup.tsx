@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/styles/global';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -12,19 +13,38 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInputProps,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-function InfoIcon({ message }: { message: string }) {
+// A label with an optional info icon, above its input.
+function Field({
+  label,
+  info,
+  ...input
+}: { label: string; info?: string } & TextInputProps) {
   return (
-    <Pressable onPress={() => Alert.alert('Info', message)} hitSlop={8} style={styles.info}>
-      <Image source={require('../../assets/images/InfoIcon.png')} style={styles.infoIcon} contentFit='contain' />
-    </Pressable>
+    <View style={styles.field}>
+      <View style={styles.labelRow}>
+        <Text style={styles.label}>{label}</Text>
+        {info && (
+          <Pressable onPress={() => Alert.alert('Info', info)} hitSlop={8}>
+            <Image
+              source={require('../../assets/images/InfoIcon.png')}
+              style={styles.infoIcon}
+              contentFit='contain'
+            />
+          </Pressable>
+        )}
+      </View>
+      <TextInput placeholderTextColor={PLACEHOLDER} style={styles.input} {...input} />
+    </View>
   );
 }
 
 export default function SignUpScreen() {
+  const insets = useSafeAreaInsets();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -59,23 +79,15 @@ export default function SignUpScreen() {
       });
       if (error) throw error;
 
-      // Without a session (email confirmation enabled) RLS would reject the insert.
+      // With email confirmation enabled there is no session until they confirm.
       if (!data.session || !data.user) {
         Alert.alert('Almost there', 'Check your inbox to confirm your email, then log in.');
         router.back();
         return;
       }
 
-      const { error: profileError } = await supabase.from('users').insert({
-        userId: data.user.id,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        email: email.trim(),
-        isVerified: false,
-        isDriver: false,
-      });
-      if (profileError) throw profileError;
-
+      // The users row is created by a database trigger (supabase/driver_setup.sql),
+      // which reads firstName and lastName from the metadata sent above.
       router.replace('/welcome');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong. Try again.';
@@ -90,150 +102,138 @@ export default function SignUpScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps='handled'>
-        <View style={styles.header}>
-          <Pressable style={styles.back} onPress={() => router.back()} hitSlop={8}>
-            <Image source={require('../../assets/images/backButton.png')} style={styles.backIcon} contentFit='contain' />
-          </Pressable>
-          <Image
-            source={require('../../assets/images/ease-logo-tiny.png')}
-            style={styles.logo}
-            contentFit='contain'
-          />
-        </View>
-
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 56 }]}
+        keyboardShouldPersistTaps='handled'
+      >
         <Image
           source={require('../../assets/images/account_circle.png')}
+          tintColor={colors.brand}
           style={styles.avatar}
           contentFit='contain'
         />
+        <Text style={styles.title}>Create an Account</Text>
 
-        <View style={styles.row}>
-          <View style={styles.labelWrap}>
-            <Text style={styles.label}>First Name</Text>
-            <InfoIcon message='Your legal first name.' />
-          </View>
-          <TextInput
-            placeholder='John'
-            placeholderTextColor={PLACEHOLDER}
-            autoComplete='given-name'
-            value={firstName}
-            onChangeText={setFirstName}
-            style={[styles.input, { width: 120 }]}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={styles.labelWrap}>
-            <Text style={styles.label}>Last Name</Text>
-            <InfoIcon message='Your legal last name.' />
-          </View>
-          <TextInput
-            placeholder='Doe'
-            placeholderTextColor={PLACEHOLDER}
-            autoComplete='family-name'
-            value={lastName}
-            onChangeText={setLastName}
-            style={[styles.input, { width: 120 }]}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={styles.labelWrap}>
-            <Text style={styles.label}>Email</Text>
-            <InfoIcon message='Used to log in and to contact you about rides.' />
-          </View>
-          <TextInput
-            placeholder='example@ease.com'
-            placeholderTextColor={PLACEHOLDER}
-            autoCapitalize='none'
-            autoComplete='email'
-            keyboardType='email-address'
-            value={email}
-            onChangeText={setEmail}
-            style={[styles.input, { width: 185 }]}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={styles.labelWrap}>
-            <Text style={styles.label}>Password</Text>
-            <InfoIcon message='At least 6 characters.' />
-          </View>
-          <TextInput
-            placeholder='examplepassword'
-            placeholderTextColor={PLACEHOLDER}
-            secureTextEntry
-            autoComplete='new-password'
-            value={password}
-            onChangeText={setPassword}
-            style={[styles.input, { width: 170 }]}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <Text style={[styles.label, { width: 90 }]}>Confirm Password</Text>
-          <TextInput
-            placeholder='examplepassword'
-            placeholderTextColor={PLACEHOLDER}
-            secureTextEntry
-            autoComplete='new-password'
-            value={confirm}
-            onChangeText={setConfirm}
-            style={[styles.input, { width: 170 }]}
-          />
-        </View>
+        <Field
+          label='First Name'
+          info='Your legal first name.'
+          placeholder='John'
+          autoComplete='given-name'
+          value={firstName}
+          onChangeText={setFirstName}
+        />
+        <Field
+          label='Last Name'
+          info='Your legal last name.'
+          placeholder='Doe'
+          autoComplete='family-name'
+          value={lastName}
+          onChangeText={setLastName}
+        />
+        <Field
+          label='Email'
+          info='Used to log in and to contact you about rides.'
+          placeholder='example@ease.com'
+          autoCapitalize='none'
+          autoComplete='email'
+          keyboardType='email-address'
+          value={email}
+          onChangeText={setEmail}
+        />
+        <Field
+          label='Password'
+          info='At least 6 characters.'
+          placeholder='please enter a secure password'
+          secureTextEntry
+          autoComplete='new-password'
+          value={password}
+          onChangeText={setPassword}
+        />
+        <Field
+          label='Confirm Password'
+          placeholder='please re-enter your password'
+          secureTextEntry
+          autoComplete='new-password'
+          value={confirm}
+          onChangeText={setConfirm}
+        />
 
         {busy ? (
-          <ActivityIndicator color={DARK} style={styles.spinner} />
+          <ActivityIndicator color={colors.brand} style={styles.spinner} />
         ) : (
           <Pressable style={styles.button} onPress={submit}>
             <Text style={styles.buttonText}>Done</Text>
           </Pressable>
         )}
       </ScrollView>
+
+      <Pressable
+        style={[styles.back, { top: insets.top + 8 }]}
+        onPress={() => router.back()}
+        hitSlop={8}
+      >
+        <Image
+          source={require('../../assets/images/ArrowleftIcon.png')}
+          style={styles.backIcon}
+          contentFit='contain'
+        />
+      </Pressable>
     </KeyboardAvoidingView>
   );
 }
 
-const DARK = '#1a1a1a';
 const PLACEHOLDER = '#b5b5b5';
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  content: { paddingTop: 60, paddingHorizontal: 30, paddingBottom: 40 },
-  header: { alignItems: 'center', justifyContent: 'center', marginBottom: 32 },
-  // Image includes its own shadow padding; the button face is ~60% of the width.
-  back: { position: 'absolute', left: -26, zIndex: 1 },
-  backIcon: { width: 77, height: 77 },
-  logo: { width: 160, aspectRatio: 444 / 177 },
-  avatar: { width: 166, height: 166, alignSelf: 'center', marginBottom: 36 },
-  row: {
-    flexDirection: 'row',
+  content: { paddingHorizontal: 28, paddingBottom: 40 },
+  back: {
+    position: 'absolute',
+    left: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  labelWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  label: { fontSize: 16, color: DARK },
-  info: { width: 15, height: 15 },
-  infoIcon: { width: 15, height: 15 },
+  backIcon: { width: 20, height: 20 },
+  avatar: { width: 72, height: 72, alignSelf: 'center' },
+  title: {
+    textAlign: 'center',
+    color: colors.brand,
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 8,
+    marginBottom: 28,
+  },
+  field: { marginBottom: 16 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  label: { fontSize: 13, fontWeight: '600', color: '#1a1a1a' },
+  infoIcon: { width: 14, height: 14 },
   input: {
     borderWidth: 1,
     borderColor: '#d9d9d9',
-    borderRadius: 8,
-    paddingVertical: 10,
+    borderRadius: 14,
+    paddingVertical: 9,
     paddingHorizontal: 14,
-    fontSize: 14,
+    fontSize: 13,
     color: colors.text,
   },
   button: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 6,
+    backgroundColor: colors.brand,
+    borderRadius: 22,
     paddingVertical: 12,
     alignItems: 'center',
-    marginTop: 24,
+    alignSelf: 'center',
+    width: '70%',
+    marginTop: 32,
   },
-  buttonText: { color: '#FFFFFF', fontSize: 16 },
-  spinner: { paddingVertical: 12, marginTop: 24 },
+  buttonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '500' },
+  spinner: { paddingVertical: 12, marginTop: 32 },
 });

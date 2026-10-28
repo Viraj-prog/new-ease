@@ -4,8 +4,10 @@
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~57.0.19",
+    "@expo/vector-icons": "^15.0.2",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@maplibre/maplibre-react-native": "^11.4.0",
+    "@react-native-community/datetimepicker": "9.1.0",
     "@react-navigation/drawer": "^7.14.4",
     "@stadiamaps/api": "^9.1.0",
     "@supabase/supabase-js": "^2.117.3",
@@ -16,6 +18,7 @@
     "expo-glass-effect": "~57.0.3",
     "expo-image": "~57.0.5",
     "expo-linking": "~57.0.10",
+    "expo-location": "~57.0.22",
     "expo-router": "~57.0.22",
     "expo-secure-store": "~57.0.4",
     "expo-splash-screen": "~57.0.9",

@@ -7,20 +7,12 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.container}>
       <Image
-        source={require('../../assets/images/ease-logo-tiny.png')}
-        style={styles.logo}
+        source={require('../../assets/images/accountMadeCheckmarkGreen.png')}
+        style={styles.check}
         contentFit='contain'
       />
-      <View style={styles.body}>
-        <Image
-          source={require('../../assets/images/accountMadeCheckmark.png')}
-          style={styles.check}
-          contentFit='contain'
-        />
-        <Text style={styles.title}>Account Successfully Created!</Text>
-        <Text style={styles.subtitle}>Welcome to the @Ease Transit Community!</Text>
-      </View>
-      <Pressable style={styles.button} onPress={() => router.replace('/(tabs)')}>
+      <Text style={styles.title}>Account Successfully Created!</Text>
+      <Pressable style={styles.button} onPress={() => router.replace('/')}>
         <Text style={styles.buttonText}>Start Riding</Text>
       </Pressable>
     </View>
@@ -31,20 +23,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: 60,
-    paddingHorizontal: 30,
-    paddingBottom: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
   },
-  logo: { width: 160, aspectRatio: 444 / 177, alignSelf: 'center' },
-  body: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  check: { width: 170, height: 170, marginBottom: 40 },
-  title: { fontSize: 32, textAlign: 'center', color: colors.text, marginBottom: 40 },
-  subtitle: { fontSize: 16, textAlign: 'center', color: colors.text },
+  check: { width: 150, height: 150, marginBottom: 28 },
+  title: {
+    fontSize: 24,
+    textAlign: 'center',
+    color: colors.text,
+    marginBottom: 28,
+  },
   button: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 6,
-    paddingVertical: 12,
+    backgroundColor: colors.success,
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 48,
     alignItems: 'center',
   },
-  buttonText: { color: '#FFFFFF', fontSize: 16 },
+  buttonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '500' },
 });
