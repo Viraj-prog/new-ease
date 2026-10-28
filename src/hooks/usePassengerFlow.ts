@@ -92,7 +92,7 @@ export function usePassengerFlow(userId: string | undefined) {
 
       setRequestId(await saveRequest({ passengerId: userId, from, to, when, requestId }));
 
-      const list = await searchRides(from, to, when);
+      const list = await searchRides(from, to, when, userId);
       setResults(list);
       if (list.length === 0) setMsg('No drivers on your route for that time.');
       return list.length > 0;

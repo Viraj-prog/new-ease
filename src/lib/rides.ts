@@ -252,15 +252,16 @@ export async function saveRequest(args: {
   return data.id;
 }
 
-// Passenger: open trips that day, ranked by how close they pass.
-export async function searchRides(from: Pt, to: Pt, when: Date): Promise<Result[]> {
+// Passenger: open trips that day, ranked by how close they pass. The user's own trips are left out.
+export async function searchRides(from: Pt, to: Pt, when: Date, userId: string): Promise<Result[]> {
   const { from: a, to: b } = dayRange(when);
   const { data, error } = await supabase
     .from('rides')
     .select(
-      `rideId, startLat, startLng, endLat, endLng, tripMdd, maxExtraKm, route,
+      `rideId, driverId, startLat, startLng, endLat, endLng, tripMdd, maxExtraKm, route,
        drivers ( driverRating, mdd, users ( firstName, lastName ) )`,
     )
+    .neq('driverId', userId)
     .gte('departAt', a)
     .lte('departAt', b)
     .eq('isCompleted', false)

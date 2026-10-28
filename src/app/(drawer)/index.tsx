@@ -18,7 +18,7 @@ import BottomSheet, {
 import { Image, type ImageSource } from 'expo-image';
 import { useNavigation } from 'expo-router';
 import { type DrawerNavigationProp } from 'expo-router/drawer';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -202,7 +202,7 @@ export default function HomeScreen() {
         enableOverDrag={false}
         keyboardBehavior='extend'
         animationConfigs={animationConfigs}
-        backgroundStyle={{ borderRadius: 40, opacity: 0.95 }}
+        backgroundStyle={{ borderRadius: 40, opacity: 0.95, backgroundColor: '#fafafa' }}
         handleIndicatorStyle={styles.handle}
       >
         <BottomSheetScrollView
@@ -215,7 +215,7 @@ export default function HomeScreen() {
               <BottomSheetTextInput
                 style={styles.locationInput}
                 placeholder='Current Location'
-                placeholderTextColor={colors.primary}
+                placeholderTextColor={colors.brand}
                 value={pickup}
                 onChangeText={setPickup}
                 onFocus={() => sheetRef.current?.snapToIndex(2)}
@@ -241,14 +241,14 @@ export default function HomeScreen() {
             {driverMode ? (
               <ActionButton
                 icon={require('../../../assets/images/PlusIconBlack.png')}
-                label='Post'
+                label='Post Ride'
                 onPress={onPost}
                 loading={driver.loading}
               />
             ) : (
               <ActionButton
                 icon={require('../../../assets/images/SearchIconBlack.png')}
-                label='Find'
+                label='Find Ride'
                 onPress={onFind}
                 loading={passenger.loading}
               />
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   locationCard: {
-    backgroundColor: '#fafafa',
+    backgroundColor: 'white',
     marginTop: 8,
     marginBottom: 5,
     borderRadius: 32,
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fafafa',
+    backgroundColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
-    backgroundColor: '#fafafa',
+    backgroundColor: 'white',
     borderRadius: 40,
     paddingHorizontal: 20,
     paddingVertical: 12,

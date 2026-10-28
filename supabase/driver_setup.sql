@@ -220,6 +220,9 @@ begin
   if r_ride."driverId" <> auth.uid() then
     raise exception 'This is not your ride';
   end if;
+  if r_req."passengerId" = r_ride."driverId" then
+    raise exception 'You cannot accept your own request';
+  end if;
   if coalesce(r_ride.occupied, false) then
     raise exception 'This ride is already taken';
   end if;
@@ -237,7 +240,8 @@ $$;
 revoke all on function public.accept_request(uuid) from public, anon;
 grant execute on function public.accept_request(uuid) to authenticated;
 
--- 9. A request cannot be sent to a ride that is already taken or completed.
+-- 9. A request cannot be sent to a ride that is already taken or completed, or to the
+--    requester's own ride.
 create or replace function public.guard_request_target()
 returns trigger
 language plpgsql
@@ -246,17 +250,21 @@ set search_path = public
 as $$
 declare
   taken boolean;
+  owner uuid;
 begin
   if new.status = 'pending'
      and new."selectedRideId" is not null
      and (tg_op = 'INSERT'
           or new.status is distinct from old.status
           or new."selectedRideId" is distinct from old."selectedRideId") then
-    select coalesce(occupied, false) or coalesce("isCompleted", false)
-      into taken
+    select coalesce(occupied, false) or coalesce("isCompleted", false), "driverId"
+      into taken, owner
       from public.rides where "rideId" = new."selectedRideId";
     if taken is null then
       raise exception 'That ride does not exist';
+    end if;
+    if owner = new."passengerId" then
+      raise exception 'You cannot book your own ride';
     end if;
     if taken then
       raise exception 'This ride is no longer available';
