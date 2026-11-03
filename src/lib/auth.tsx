@@ -12,7 +12,13 @@ type AuthState = {
   driverMode: boolean;
   setDriverMode: (on: boolean) => void;
   refreshProfile: () => Promise<void>;
+  // A password-reset link signs the user in, but they only count as logged in once
+  // they pick a new password. endRecovery(false) signs the reset session back out.
+  beginRecovery: () => void;
+  endRecovery: (keepSession: boolean) => Promise<void>;
 };
+
+const RECOVERY_KEY = 'passwordRecovery';
 
 const AuthContext = createContext<AuthState>({
   session: null,
@@ -21,6 +27,8 @@ const AuthContext = createContext<AuthState>({
   driverMode: false,
   setDriverMode: () => {},
   refreshProfile: async () => {},
+  beginRecovery: () => {},
+  endRecovery: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -28,6 +36,7 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recovering, setRecovering] = useState(false);
   const [isDriver, setIsDriver] = useState(false);
   // Drivers can switch to passenger view and back; remembered per user on this device.
   const [driverPref, setDriverPref] = useState(true);
@@ -37,8 +46,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     supabase.auth
       .getSession()
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         if (error) console.warn('getSession failed', error.message);
+        // The app was closed mid-reset: drop the leftover reset session.
+        if (data.session && (await secureStorage.getItem(RECOVERY_KEY))) {
+          await supabase.auth.signOut();
+          await secureStorage.removeItem(RECOVERY_KEY);
+          setSession(null);
+          return;
+        }
         setSession(data.session);
       })
       .catch((err) => console.warn('getSession threw', err))
@@ -76,9 +92,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (userId) secureStorage.setItem(prefKey, on ? 'on' : 'off');
   }
 
+  const beginRecovery = useCallback(() => {
+    setRecovering(true);
+    secureStorage.setItem(RECOVERY_KEY, '1');
+  }, []);
+
+  const endRecovery = useCallback(async (keepSession: boolean) => {
+    await secureStorage.removeItem(RECOVERY_KEY);
+    if (!keepSession) await supabase.auth.signOut();
+    setRecovering(false);
+  }, []);
+
   return (
     <AuthContext.Provider
-      value={{ session, loading, isDriver, driverMode: isDriver && driverPref, setDriverMode, refreshProfile }}
+      value={{
+        session: recovering ? null : session,
+        loading,
+        isDriver,
+        driverMode: isDriver && driverPref,
+        setDriverMode,
+        refreshProfile,
+        beginRecovery,
+        endRecovery,
+      }}
     >
       {children}
     </AuthContext.Provider>

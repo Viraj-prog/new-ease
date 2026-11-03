@@ -17,10 +17,13 @@ function RootNavigator() {
       </Stack.Protected>
       <Stack.Protected guard={!session}>
         <Stack.Screen name='login' />
+        <Stack.Screen name='forgot-password' />
       </Stack.Protected>
       {/* Unguarded so they stay mounted when signUp creates a session mid-flow */}
       <Stack.Screen name='signup' />
       <Stack.Screen name='welcome' />
+      {/* Unguarded: the recovery link signs the user in before they pick a new password */}
+      <Stack.Screen name='reset-password' />
     </Stack>
   );
 }

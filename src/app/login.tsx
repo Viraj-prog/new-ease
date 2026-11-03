@@ -84,10 +84,17 @@ export default function LoginScreen() {
           </Pressable>
         )}
 
-        <View style={styles.signupRow}>
-          <Text style={styles.signupText}>Don't have an account? </Text>
+        <View style={styles.footerRow}>
+          <Pressable
+            onPress={() => router.push({ pathname: '/forgot-password', params: { email: email.trim() } })}
+            hitSlop={8}
+          >
+            <Text style={styles.footerLink}>Forgot password?</Text>
+          </Pressable>
           <Pressable onPress={() => router.push('/signup')} hitSlop={8}>
-            <Text style={styles.signupLink}>Sign up</Text>
+            <Text style={styles.footerText}>
+              New Here? <Text style={styles.footerLink}>Sign up</Text>
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -141,7 +148,7 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '500' },
   spinner: { paddingVertical: 10, marginTop: 2 },
-  signupRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 28 },
-  signupText: { fontSize: 12, color: '#9a9a9a' },
-  signupLink: { fontSize: 12, color: colors.brand, fontWeight: '600' },
+  footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 28 },
+  footerText: { fontSize: 12, color: '#9a9a9a' },
+  footerLink: { fontSize: 12, color: colors.brand, fontWeight: '600' },
 });
