@@ -1,3 +1,4 @@
+import LogoutPopup from '@/components/LogoutPopup';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/styles/global';
 import { Image } from 'expo-image';
@@ -8,12 +9,21 @@ import {
   DrawerItemList,
   type DrawerContentComponentProps,
 } from 'expo-router/drawer';
+import { useState } from 'react';
 import { Alert } from 'react-native';
 
 function DrawerContent(props: DrawerContentComponentProps) {
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
   const handleLogout = async () => {
+    setLoggingOut(true);
     const { error } = await supabase.auth.signOut();
-    if (error) Alert.alert('Log out failed', error.message);
+    if (error) {
+      setLoggingOut(false);
+      setConfirmVisible(false);
+      Alert.alert('Log out failed', error.message);
+    }
   };
 
   return (
@@ -24,7 +34,13 @@ function DrawerContent(props: DrawerContentComponentProps) {
         contentFit='contain'
       />
       <DrawerItemList {...props} />
-      <DrawerItem label='Log out' labelStyle={{ color: colors.alert, fontWeight: 'bold' }} onPress={handleLogout} />
+      <DrawerItem label='Log out' labelStyle={{ color: colors.alert, fontWeight: 'bold' }} onPress={() => setConfirmVisible(true)} />
+      <LogoutPopup
+        visible={confirmVisible}
+        loggingOut={loggingOut}
+        onConfirm={handleLogout}
+        onClose={() => setConfirmVisible(false)}
+      />
     </DrawerContentScrollView>
   );
 }
