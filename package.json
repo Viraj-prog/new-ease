@@ -11,6 +11,8 @@
     "@react-navigation/drawer": "^7.14.4",
     "@stadiamaps/api": "^9.1.0",
     "@supabase/supabase-js": "^2.117.3",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "~57.0.2",
     "expo": "~57.0.24",
     "expo-constants": "~57.0.19",
     "expo-device": "~57.0.2",

@@ -10,6 +10,9 @@ export const colors = {
   alert: '#ff5252',
   brand: '#1E90FF',
   success: '#34C759',
+  label: '#1a1a1a',
+  placeholder: '#b5b5b5',
+  border: '#d9d9d9',
 };
 
 export const globalStyles = StyleSheet.create({

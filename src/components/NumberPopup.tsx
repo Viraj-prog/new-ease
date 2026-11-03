@@ -1,6 +1,7 @@
 import { colors } from '@/styles/global';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import PopupShell from './PopupShell';
 
 type Props = {
   visible: boolean;
@@ -28,55 +29,37 @@ export default function NumberPopup({ visible, title, hint, value, unit, onSave,
   }
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType='fade'
-      onRequestClose={onClose}
-      onShow={() => setText(String(value))}
-    >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        {/* Inner pressable stops taps on the card from closing the popup. */}
-        <Pressable style={styles.card} onPress={() => {}}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.hint}>{hint}</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.input}
-              value={text}
-              onChangeText={(t) => {
-                setText(t);
-                setError('');
-              }}
-              keyboardType='decimal-pad'
-              autoFocus
-              selectTextOnFocus
-            />
-            <Text style={styles.unit}>{unit}</Text>
-          </View>
-          {!!error && <Text style={styles.error}>{error}</Text>}
-          <View style={styles.row}>
-            <Pressable style={[styles.button, styles.cancel]} onPress={onClose}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </Pressable>
-            <Pressable style={styles.button} onPress={save}>
-              <Text style={styles.buttonText}>Save</Text>
-            </Pressable>
-          </View>
+    <PopupShell visible={visible} onClose={onClose} onShow={() => setText(String(value))}>
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.hint}>{hint}</Text>
+      <View style={styles.inputRow}>
+        <TextInput
+          style={styles.input}
+          value={text}
+          onChangeText={(t) => {
+            setText(t);
+            setError('');
+          }}
+          keyboardType='decimal-pad'
+          autoFocus
+          selectTextOnFocus
+        />
+        <Text style={styles.unit}>{unit}</Text>
+      </View>
+      {!!error && <Text style={styles.error}>{error}</Text>}
+      <View style={styles.row}>
+        <Pressable style={[styles.button, styles.cancel]} onPress={onClose}>
+          <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
-      </Pressable>
-    </Modal>
+        <Pressable style={styles.button} onPress={save}>
+          <Text style={styles.buttonText}>Save</Text>
+        </Pressable>
+      </View>
+    </PopupShell>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  card: { backgroundColor: '#fff', borderRadius: 20, padding: 20, gap: 10 },
   title: { fontSize: 18, fontWeight: '700', color: colors.text },
   hint: { fontSize: 13, color: '#555' },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

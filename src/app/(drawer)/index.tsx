@@ -152,8 +152,12 @@ export default function HomeScreen() {
 
   const active = !!driver.trip || passenger.results.length > 0 || !!passenger.msg || !!driver.msg;
   function clearAll() {
+    Keyboard.dismiss();
     passenger.clear();
     driver.clear();
+    setPickup('');
+    setDestination('');
+    sheetRef.current?.snapToIndex(1);
   }
 
   // What the map draws: the posted trip, or the driver being looked at.

@@ -20,6 +20,11 @@ type AuthState = {
 
 const RECOVERY_KEY = 'passwordRecovery';
 
+async function dropRecoverySession() {
+  await secureStorage.removeItem(RECOVERY_KEY);
+  await supabase.auth.signOut();
+}
+
 const AuthContext = createContext<AuthState>({
   session: null,
   loading: true,
@@ -44,14 +49,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const prefKey = `driverMode.${userId}`;
 
   useEffect(() => {
-    supabase.auth
-      .getSession()
-      .then(async ({ data, error }) => {
+    Promise.all([supabase.auth.getSession(), secureStorage.getItem(RECOVERY_KEY)])
+      .then(async ([{ data, error }, leftover]) => {
         if (error) console.warn('getSession failed', error.message);
         // The app was closed mid-reset: drop the leftover reset session.
-        if (data.session && (await secureStorage.getItem(RECOVERY_KEY))) {
-          await supabase.auth.signOut();
-          await secureStorage.removeItem(RECOVERY_KEY);
+        if (data.session && leftover) {
+          await dropRecoverySession();
           setSession(null);
           return;
         }
@@ -98,8 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const endRecovery = useCallback(async (keepSession: boolean) => {
-    await secureStorage.removeItem(RECOVERY_KEY);
-    if (!keepSession) await supabase.auth.signOut();
+    if (keepSession) await secureStorage.removeItem(RECOVERY_KEY);
+    else await dropRecoverySession();
     setRecovering(false);
   }, []);
 
