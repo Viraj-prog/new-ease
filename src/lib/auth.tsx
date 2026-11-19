@@ -8,7 +8,7 @@ type AuthState = {
   loading: boolean;
   // Loaded from the users table; false until it arrives (or if there is no row).
   isDriver: boolean;
-  // True when the user is a driver AND has driver mode switched on (see Settings).
+  // True when the user is a driver AND has driver mode switched on (see the drawer's Driver/Rider toggle).
   driverMode: boolean;
   setDriverMode: (on: boolean) => void;
   refreshProfile: () => Promise<void>;

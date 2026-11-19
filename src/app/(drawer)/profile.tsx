@@ -1,5 +1,8 @@
+import MenuButton from '@/components/MenuButton';
 import { ageFrom, useProfile } from '@/hooks/useProfile';
-import { colors } from '@/styles/global';
+import { useTheme } from '@/lib/theme';
+import { fonts } from '@/styles/fonts';
+import { type Colors } from '@/styles/theme';
 import { Image } from 'expo-image';
 import { useNavigation } from 'expo-router';
 import { type DrawerNavigationProp } from 'expo-router/drawer';
@@ -7,6 +10,9 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function Field({ label, value, done }: { label: string; value: string; done: boolean }) {
+    const { colors } = useTheme();
+    const styles = makeStyles(colors);
+
     return (
         <View style={styles.fieldRow}>
             <Image
@@ -23,6 +29,7 @@ function Field({ label, value, done }: { label: string; value: string; done: boo
                 source={require('../../../assets/images/EditIcon.png')}
                 style={styles.pencil}
                 contentFit='contain'
+                tintColor={colors.textSecondary}
             />
             <Text style={styles.fieldValue}>{value}</Text>
         </View>
@@ -30,6 +37,8 @@ function Field({ label, value, done }: { label: string; value: string; done: boo
 }
 
 export default function ProfileScreen() {
+    const { colors } = useTheme();
+    const styles = makeStyles(colors);
     const navigation = useNavigation<DrawerNavigationProp<Record<string, undefined>>>();
     const insets = useSafeAreaInsets();
     const { profile, loading, error, email } = useProfile();
@@ -83,7 +92,7 @@ export default function ProfileScreen() {
                         <Text style={styles.name}>{name || 'No name yet'}</Text>
                         <View style={styles.verifyRow}>
                             <View style={[styles.chip, profile?.isVerified && styles.chipVerified]}>
-                                <Text style={styles.chipText}>
+                                <Text style={[styles.chipText, profile?.isVerified && styles.chipTextVerified]}>
                                     {profile?.isVerified ? 'Verified' : 'Not Verified'}
                                 </Text>
                             </View>
@@ -103,63 +112,75 @@ export default function ProfileScreen() {
                 </View>
             </ScrollView>
 
-            <Pressable
-                onPress={() => navigation.openDrawer()}
-                style={[styles.menu, { top: insets.top + 8 }]}
-                hitSlop={8}
-            >
-                <Image
-                    source={require('../../../assets/images/menuButton.png')}
-                    style={styles.menuIcon}
-                    contentFit='contain'
-                />
-            </Pressable>
+            <MenuButton onPress={() => navigation.openDrawer()} />
         </View>
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    menu: { position: 'absolute', left: 12 },
-    menuIcon: { width: 70, height: 70 },
-    avatar: {
-        width: 220,
-        height: 220,
-        alignSelf: 'center',
-    },
-    avatarImage: { width: 220, height: 220, borderRadius: 110 },
-    avatarBadge: {
-        position: 'absolute',
-        right: 0,
-        bottom: 0,
-    },
-    avatarBadgeIcon: { width: 44, height: 44 },
-    stars: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 16 },
-    star: { width: 20, height: 20 },
-    loading: { marginTop: 20 },
-    name: { textAlign: 'center', fontSize: 36, fontWeight: '700', marginTop: 8 },
-    verifyRow: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: 8,
-        marginTop: 8,
-    },
-    chip: {
-        backgroundColor: '#d9d9d9',
-        borderRadius: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-    },
-    chipVerified: { backgroundColor: '#bbf7d0' },
-    chipText: { color: '#555', fontSize: 13 },
-    link: { textDecorationLine: 'underline', color: '#555', fontSize: 13 },
-    rides: { textAlign: 'center', color: '#777', marginTop: 8 },
-    error: { textAlign: 'center', color: colors.alert, marginTop: 8, paddingHorizontal: 30 },
-    fields: { paddingHorizontal: 40, marginTop: 32, gap: 12 },
-    fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    status: { width: 18, height: 18 },
-    fieldLabel: { fontSize: 15 },
-    pencil: { width: 16, height: 16 },
-    fieldValue: { marginLeft: 'auto', fontSize: 12 },
-});
+const makeStyles = (c: Colors) =>
+    StyleSheet.create({
+        container: { flex: 1, backgroundColor: c.background },
+        avatar: {
+            width: 220,
+            height: 220,
+            alignSelf: 'center',
+        },
+        avatarImage: { width: 220, height: 220, borderRadius: 110 },
+        avatarBadge: {
+            position: 'absolute',
+            right: 0,
+            bottom: 0,
+        },
+        avatarBadgeIcon: { width: 44, height: 44 },
+        stars: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 16 },
+        star: { width: 20, height: 20 },
+        loading: { marginTop: 20 },
+        name: {
+            fontFamily: fonts.titleSemibold,
+            textAlign: 'center',
+            fontSize: 36,
+            color: c.text,
+            marginTop: 8,
+        },
+        verifyRow: {
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 8,
+            marginTop: 8,
+        },
+        chip: {
+            backgroundColor: c.pill,
+            borderRadius: 4,
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+        },
+        chipVerified: { backgroundColor: c.successTint },
+        chipText: { fontFamily: fonts.semibold, color: c.textSecondary, fontSize: 13 },
+        chipTextVerified: { color: c.onSuccessTint },
+        link: {
+            fontFamily: fonts.medium,
+            textDecorationLine: 'underline',
+            color: c.brand,
+            fontSize: 13,
+        },
+        rides: { fontFamily: fonts.regular, textAlign: 'center', color: c.textSecondary, marginTop: 8 },
+        error: {
+            fontFamily: fonts.regular,
+            textAlign: 'center',
+            color: c.alertText,
+            marginTop: 8,
+            paddingHorizontal: 30,
+        },
+        fields: { paddingHorizontal: 40, marginTop: 32, gap: 12 },
+        fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+        status: { width: 18, height: 18 },
+        fieldLabel: { fontFamily: fonts.medium, fontSize: 15, color: c.text },
+        pencil: { width: 16, height: 16 },
+        fieldValue: {
+            fontFamily: fonts.regular,
+            marginLeft: 'auto',
+            fontSize: 12,
+            color: c.textSecondary,
+        },
+    });

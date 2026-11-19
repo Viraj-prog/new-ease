@@ -1,4 +1,6 @@
-import { colors } from '@/styles/global';
+import { useTheme } from '@/lib/theme';
+import { fonts } from '@/styles/fonts';
+import { type Colors } from '@/styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
 import PopupShell from './PopupShell';
@@ -14,6 +16,9 @@ type Props = {
 
 // Passenger popup: "Confirming Ride" with a spinner, then Ride Accepted / Ride Declined.
 export default function RideStatusPopup({ confirming, notice, onCancel, onClose }: Props) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+
   // An answer takes over from the spinner.
   const showNotice = !!notice;
   const visible = showNotice || confirming;
@@ -32,7 +37,7 @@ export default function RideStatusPopup({ confirming, notice, onCancel, onClose 
           <Ionicons
             name={notice === 'accepted' ? 'checkmark-circle' : 'close-circle'}
             size={84}
-            color={notice === 'accepted' ? colors.success : '#dc2626'}
+            color={notice === 'accepted' ? colors.success : colors.alert}
           />
           <Text style={styles.title}>
             {notice === 'accepted' ? 'Ride Accepted!' : 'Ride Declined'}
@@ -54,24 +59,25 @@ export default function RideStatusPopup({ confirming, notice, onCancel, onClose 
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    borderRadius: 24,
-    paddingVertical: 28,
-    paddingHorizontal: 32,
-    alignSelf: 'center',
-    alignItems: 'center',
-    gap: 16,
-    minWidth: 240,
-  },
-  title: { fontSize: 20, fontWeight: '600', color: colors.text, textAlign: 'center' },
-  button: {
-    backgroundColor: colors.brand,
-    borderRadius: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 40,
-    marginTop: 4,
-  },
-  buttonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  cancel: { color: '#2563eb', fontSize: 15, fontWeight: '600' },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    card: {
+      borderRadius: 24,
+      paddingVertical: 28,
+      paddingHorizontal: 32,
+      alignSelf: 'center',
+      alignItems: 'center',
+      gap: 16,
+      minWidth: 240,
+    },
+    title: { fontFamily: fonts.titleMedium, fontSize: 20, color: c.text, textAlign: 'center' },
+    button: {
+      backgroundColor: c.brand,
+      borderRadius: 20,
+      paddingVertical: 10,
+      paddingHorizontal: 40,
+      marginTop: 4,
+    },
+    buttonText: { fontFamily: fonts.semibold, color: c.onBrand, fontSize: 15 },
+    cancel: { fontFamily: fonts.semibold, color: c.brand, fontSize: 15 },
+  });

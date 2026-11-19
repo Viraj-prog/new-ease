@@ -8,9 +8,8 @@ import {
 } from '@maplibre/maplibre-react-native';
 import { Pressable, StyleSheet } from 'react-native';
 import { boundsOf, type Pt } from '@/lib/geo';
-
-// Free demo style; swap for a Stadia Maps style URL once you have an API key.
-const MAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
+import { useMapStyle } from '@/lib/mapStyle';
+import { useTheme } from '@/lib/theme';
 
 // Fallback centre (Vancouver) used until the user's location is available.
 const DEFAULT_CENTER: [number, number] = [-123.1207, 49.2827];
@@ -46,10 +45,12 @@ export default function InteractiveMap({
   markers = [],
   padding = { top: 120, right: 40, bottom: 320, left: 40 },
 }: Props) {
+  const mapStyle = useMapStyle();
+  const { colors } = useTheme();
   const bounds = boundsOf([...route, ...altRoute, ...markers.map((m) => m.point)]);
 
   return (
-    <Map style={styles.map} mapStyle={MAP_STYLE}>
+    <Map style={styles.map} mapStyle={mapStyle}>
       {bounds ? (
         // Something to show: fit it into the visible area above the sheet.
         <Camera bounds={bounds} padding={padding} duration={600} />
@@ -65,10 +66,16 @@ export default function InteractiveMap({
       {route.length > 1 && (
         <GeoJSONSource id='route' data={toLine(route)}>
           <Layer
+            id='route-glow'
+            type='line'
+            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+            paint={{ 'line-color': colors.brand, 'line-width': 14, 'line-opacity': 0.25 }}
+          />
+          <Layer
             id='route-line'
             type='line'
             layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-            paint={{ 'line-color': '#2563eb', 'line-width': 5 }}
+            paint={{ 'line-color': colors.brand, 'line-width': 5 }}
           />
         </GeoJSONSource>
       )}
@@ -86,7 +93,10 @@ export default function InteractiveMap({
 
       {markers.map((m) => (
         <Marker key={m.id} lngLat={[m.point.lng, m.point.lat]}>
-          <Pressable onPress={m.onPress} style={[styles.dot, { backgroundColor: m.color }]} />
+          <Pressable
+            onPress={m.onPress}
+            style={[styles.dot, { backgroundColor: m.color, borderColor: colors.ring }]}
+          />
         </Marker>
       ))}
 
@@ -104,6 +114,5 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 3,
-    borderColor: '#fff',
   },
 });
