@@ -19,6 +19,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNotify } from '@/lib/notify';
+import InlineNotice from '@/components/InlineNotice';
 
 
 
@@ -38,6 +40,7 @@ export default function RidesScreen() {
   const styles = makeStyles(colors);
   const navigation = useNavigation<DrawerNavigationProp<Record<string, undefined>>>();
   const insets = useSafeAreaInsets();
+  const notify = useNotify();
   const { session, isDriver } = useAuth();
   const { posted, booked, loading, error, reload, cancelPosted, cancelBooked } = useMyRides(
     session?.user.id,
@@ -61,7 +64,7 @@ export default function RidesScreen() {
         style: 'destructive',
         onPress: async () => {
           const problem = await run();
-          if (problem) Alert.alert('Could not cancel', problem);
+          if (problem) notify({ kind: 'alert', title: 'Could not cancel', subtitle: problem });
         },
       },
     ]);
@@ -79,7 +82,7 @@ export default function RidesScreen() {
           <ActivityIndicator color={colors.brand} style={styles.loading} />
         ) : (
           <>
-            {!!error && <Text style={styles.error}>{error}</Text>}
+            {!!error && <InlineNotice message={error} style={styles.error} />}
 
             {isDriver && (
               <>
@@ -168,7 +171,7 @@ const makeStyles = (c: Colors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
     list: { gap: 14 },
-    error: { color: c.alertText, marginTop: 10 },
+    error: { marginTop: 10 },
     loading: { marginTop: 40 },
     title: { fontFamily: fonts.titleSemibold, fontSize: 32, color: c.text },
     section: { fontFamily: fonts.semibold, fontSize: 18, color: c.text, marginTop: 24, marginBottom: 10 },

@@ -3,8 +3,9 @@ import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import PressButton from '@/components/PressButton';
 
 type Props = {
   destination: string;
@@ -56,9 +57,9 @@ export default function TripNavigation({ destination, distanceKm, durationMin, o
             {distanceKm.toFixed(1)} km · Arrive {arrive}
           </Text>
         </View>
-        <Pressable style={styles.end} onPress={onEnd}>
+        <PressButton style={styles.end} onPress={onEnd}>
           <Text style={styles.endText}>End</Text>
-        </Pressable>
+        </PressButton>
       </View>
     </View>
   );

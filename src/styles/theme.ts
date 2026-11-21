@@ -43,6 +43,9 @@ export const lightColors = {
 
   // overlays
   scrim: 'rgba(16,23,27,0.45)',
+  statBg: '#E3E8EB',       // light grey distance / time tag
+  onStat: '#10171B',
+  statLabel: 'rgba(16,23,27,0.6)',
   shadow: 'rgba(16,23,27,0.18)',
 
   avatars: [
@@ -93,6 +96,9 @@ export const darkColors: Colors = {
   pickup: '#8B6CD6',
   dropoff: '#F1F5F3',
 
+  statBg: '#2A3138',       // lighter than the dark sheet so the tag still shows
+  onStat: '#FFFFFF',
+  statLabel: 'rgba(255,255,255,0.7)',
   scrim: 'rgba(0,0,0,0.6)',   // not specified for dark: my choice
   shadow: 'rgba(0,0,0,0.4)',  // not specified for dark: my choice
 

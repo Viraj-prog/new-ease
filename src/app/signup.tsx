@@ -7,8 +7,10 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, StyleSheet, Text } from 'react-native';
+import { useNotify } from '@/lib/notify';
 
 export default function SignUpScreen() {
+  const notify = useNotify();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -18,12 +20,12 @@ export default function SignUpScreen() {
 
   function validate() {
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !password) {
-      Alert.alert('Missing info', 'Fill in every field.');
+      notify({ kind: 'alert', title: 'Missing info', subtitle: 'Fill in every field.' });
       return false;
     }
     const problem = passwordProblem(password, confirm);
     if (problem) {
-      Alert.alert(...problem);
+      notify({ kind: 'alert', title: problem[0], subtitle: problem[1] });
       return false;
     }
     return true;
@@ -51,7 +53,7 @@ export default function SignUpScreen() {
       // which reads firstName and lastName from the metadata sent above.
       router.replace('/welcome');
     } catch (err) {
-      Alert.alert('Sign up failed', errText(err));
+      notify({ kind: 'alert', title: 'Sign up failed', subtitle: errText(err) });
     } finally {
       setBusy(false);
     }

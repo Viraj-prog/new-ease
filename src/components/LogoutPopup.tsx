@@ -1,8 +1,9 @@
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import PopupShell from './PopupShell';
+import PressButton from '@/components/PressButton';
 
 type Props = {
   visible: boolean;
@@ -32,12 +33,12 @@ export default function LogoutPopup({ visible, loggingOut, onConfirm, onClose }:
         <>
           <Text style={styles.title}>Are you sure you want to log out?</Text>
           <View style={styles.row}>
-            <Pressable style={[styles.button, styles.no]} onPress={onClose}>
+            <PressButton ghost style={[styles.button, styles.no]} onPress={onClose}>
               <Text style={styles.noText}>No</Text>
-            </Pressable>
-            <Pressable style={styles.button} onPress={onConfirm}>
+            </PressButton>
+            <PressButton style={styles.button} onPress={onConfirm}>
               <Text style={styles.yesText}>Yes</Text>
-            </Pressable>
+            </PressButton>
           </View>
         </>
       )}

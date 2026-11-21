@@ -25,6 +25,7 @@ const sources = {
   star: require('../../assets/images/icons/star.png'),
   'steering-wheel': require('../../assets/images/icons/steering-wheel.png'),
   sun: require('../../assets/images/icons/sun.png'),
+  swap: require('../../assets/images/icons/swap.png'),
   'trips-route': require('../../assets/images/icons/trips-route.png'),
   'turn-right': require('../../assets/images/icons/turn-right.png'),
   users: require('../../assets/images/icons/users.png'),

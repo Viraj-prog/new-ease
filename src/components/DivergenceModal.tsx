@@ -7,6 +7,7 @@ import { type Colors } from '@/styles/theme';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import PressButton from '@/components/PressButton';
 
 type Props = {
   visible: boolean;
@@ -58,12 +59,12 @@ export default function DivergenceModal({ visible, value, onSave, onClose }: Pro
       </View>
 
       <View style={styles.buttons}>
-        <Pressable style={[styles.button, styles.cancel]} onPress={onClose}>
+        <PressButton ghost style={[styles.button, styles.cancel]} onPress={onClose}>
           <Text style={styles.cancelText}>Cancel</Text>
-        </Pressable>
-        <Pressable style={styles.button} onPress={() => onSave(draft)}>
+        </PressButton>
+        <PressButton style={styles.button} onPress={() => onSave(draft)}>
           <Text style={styles.saveText}>Save</Text>
-        </Pressable>
+        </PressButton>
       </View>
     </PopupShell>
   );

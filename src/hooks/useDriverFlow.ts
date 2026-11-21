@@ -118,16 +118,17 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     }, [active, userId]),
   );
 
-  // Mark the shown trip finished and clear it from the screen.
-  async function finish() {
-    if (!trip) return;
+  // Mark the shown trip finished and clear it from the screen. Returns null on success, or the
+  // reason it failed. (It sets no message, so the caller can go straight back Home.)
+  async function finish(): Promise<string | null> {
+    if (!trip) return null;
     try {
       await finishTrip(trip.rideId);
       clear();
-      setMsg('Trip finished.');
+      return null;
     } catch (e) {
       console.error(e);
-      setMsg(errText(e));
+      return errText(e);
     }
   }
 

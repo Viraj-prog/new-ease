@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import PressButton from '@/components/PressButton';
 
 type Props = {
   startText: string;
@@ -51,12 +52,12 @@ export default function TripSheet(p: Props) {
 
   const startCancel = (
     <View style={styles.row}>
-      <Pressable style={[styles.button, { backgroundColor: colors.success }]} onPress={p.onStart}>
+      <PressButton style={[styles.button, { backgroundColor: colors.success }]} onPress={p.onStart}>
         <Text style={[styles.buttonText, { color: colors.onSuccess }]}>Start trip</Text>
-      </Pressable>
-      <Pressable style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onCancel}>
+      </PressButton>
+      <PressButton style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onCancel}>
         <Text style={[styles.buttonText, { color: colors.onAlert }]}>Cancel trip</Text>
-      </Pressable>
+      </PressButton>
     </View>
   );
 
@@ -100,12 +101,12 @@ export default function TripSheet(p: Props) {
         </View>
 
         <View style={styles.row}>
-          <Pressable style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onDecline}>
+          <PressButton style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onDecline}>
             <Text style={[styles.buttonText, { color: colors.onAlert }]}>Decline</Text>
-          </Pressable>
-          <Pressable style={[styles.button, { backgroundColor: colors.brand }]} onPress={p.onAccept}>
+          </PressButton>
+          <PressButton style={[styles.button, { backgroundColor: colors.brand }]} onPress={p.onAccept}>
             <Text style={[styles.buttonText, { color: colors.onBrand }]}>Accept</Text>
-          </Pressable>
+          </PressButton>
         </View>
         <Pressable onPress={p.onNotNow} hitSlop={8}>
           <Text style={styles.link}>Not now</Text>

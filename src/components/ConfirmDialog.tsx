@@ -2,7 +2,8 @@ import PopupShell from '@/components/PopupShell';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import PressButton from '@/components/PressButton';
 
 type Props = {
   visible: boolean;
@@ -24,12 +25,12 @@ export default function ConfirmDialog({ visible, title, message, busy, onYes, on
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.message}>{message}</Text>
       <View style={styles.row}>
-        <Pressable style={[styles.button, styles.no]} onPress={onNo} disabled={busy}>
+        <PressButton ghost style={[styles.button, styles.no]} onPress={onNo} disabled={busy}>
           <Text style={styles.noText}>No</Text>
-        </Pressable>
-        <Pressable style={styles.button} onPress={onYes} disabled={busy}>
+        </PressButton>
+        <PressButton style={styles.button} onPress={onYes} disabled={busy}>
           {busy ? <ActivityIndicator color={colors.onAlert} /> : <Text style={styles.yesText}>Yes</Text>}
-        </Pressable>
+        </PressButton>
       </View>
     </PopupShell>
   );

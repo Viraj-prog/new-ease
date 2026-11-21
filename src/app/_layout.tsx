@@ -4,6 +4,7 @@ import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-goog
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { NotificationProvider } from '@/lib/notify';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -44,7 +45,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <RootNavigator />
+        <NotificationProvider>
+          <RootNavigator />
+        </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   );

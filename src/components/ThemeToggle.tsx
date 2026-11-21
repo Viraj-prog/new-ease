@@ -8,6 +8,8 @@ export default function ThemeToggle() {
   return (
     <SegmentedToggle
       compact
+      // Larger than the Driver / Rider switch, so it is easier to hit.
+      segment={40}
       options={[
         { key: 'dark', icon: 'moon' },
         { key: 'light', icon: 'sun' },

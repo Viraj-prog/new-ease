@@ -8,6 +8,7 @@ import { useNavigation } from 'expo-router';
 import { type DrawerNavigationProp } from 'expo-router/drawer';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import InlineNotice from '@/components/InlineNotice';
 
 function Field({ label, value, done }: { label: string; value: string; done: boolean }) {
     const { colors } = useTheme();
@@ -102,7 +103,7 @@ export default function ProfileScreen() {
                     </>
                 )}
 
-                {!!error && <Text style={styles.error}>{error}</Text>}
+                {!!error && <InlineNotice message={error} style={styles.error} />}
 
                 <View style={styles.fields}>
                     <Field label='Email Address' value={email ?? 'N/A'} done={!!email} />
@@ -165,13 +166,7 @@ const makeStyles = (c: Colors) =>
             fontSize: 13,
         },
         rides: { fontFamily: fonts.regular, textAlign: 'center', color: c.textSecondary, marginTop: 8 },
-        error: {
-            fontFamily: fonts.regular,
-            textAlign: 'center',
-            color: c.alertText,
-            marginTop: 8,
-            paddingHorizontal: 30,
-        },
+        error: { marginTop: 8, marginHorizontal: 30 },
         fields: { paddingHorizontal: 40, marginTop: 32, gap: 12 },
         fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
         status: { width: 18, height: 18 },

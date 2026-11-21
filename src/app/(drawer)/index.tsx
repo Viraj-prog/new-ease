@@ -1,6 +1,10 @@
 import BackButton from '@/components/BackButton';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import DivergenceModal from '@/components/DivergenceModal';
+import DriverList from '@/components/DriverList';
+import DriverMatchCard from '@/components/DriverMatchCard';
+import LoadingPopup from '@/components/LoadingPopup';
+import { avatarSlot, pickBest } from '@/lib/driverExtras';
 import HomeSheetContent from '@/components/HomeSheetContent';
 import InteractiveMap, { type MapMarker } from '@/components/map';
 import MapTitleChip from '@/components/MapTitleChip';
@@ -10,45 +14,45 @@ import RideStatusPopup from '@/components/RideStatusPopup';
 import RoutePreview from '@/components/RoutePreview';
 import SearchPill from '@/components/SearchPill';
 import ThemeToggle from '@/components/ThemeToggle';
-import { DriverCard } from '@/components/TripCards';
 import TripNavigation from '@/components/TripNavigation';
 import TripSheet, { tripTitle } from '@/components/TripSheet';
 import { useDriverFlow } from '@/hooks/useDriverFlow';
+import { haversineKm, PRICE_PER_KM } from '@/lib/previousTrips';
+import { useSavedTrips } from '@/hooks/useSavedTrips';
 import { usePassengerFlow } from '@/hooks/usePassengerFlow';
 import { useRoleSwitch } from '@/hooks/useRoleSwitch';
 import { useAuth } from '@/lib/auth';
 import type { Pt } from '@/lib/geo';
-import { pickDateTime } from '@/lib/pickDateTime';
-import { errText, resolveDestination, resolveStart } from '@/lib/places';
+import { pickDate, pickDateTime, pickTime } from '@/lib/pickDateTime';
+import { CURRENT_LABEL, errText, isCurrentLabel, resolveDestination, resolveStart } from '@/lib/places';
 import { cancelPostedRide, loadPostedRides } from '@/lib/rides';
 import { getRoute } from '@/lib/routing';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
 import BottomSheet, { BottomSheetScrollView, useBottomSheetSpringConfigs } from '@gorhom/bottom-sheet';
-import { useNavigation } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { type DrawerNavigationProp } from 'expo-router/drawer';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Keyboard,
   PermissionsAndroid,
   Platform,
-  Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNotify } from '@/lib/notify';
+import InlineNotice from '@/components/InlineNotice';
 
 // Sheet heights: collapsed, home / route view, a driver's posted trip, and full (planning,
 // typing, driver list).
 const MID_FRACTION = 0.38;
 const TRIP_FRACTION = 0.46;
-const SNAP_POINTS = ['23%', `${MID_FRACTION * 100}%`, `${TRIP_FRACTION * 100}%`, '92%'];
+const SNAP_POINTS = ['23%', `${MID_FRACTION * 100}%`, `${TRIP_FRACTION * 100}%`, '94%'];
 const SNAP = { MID: 1, TRIP: 2, FULL: 3 };
 
 // How much farther than the max divergence a driver will go if they approve a request.
@@ -73,6 +77,8 @@ export default function HomeScreen() {
   const [mddOpen, setMddOpen] = useState(false);
   // 'home' shows recent / saved trips; 'plan' shows the search form and results.
   const [view, setView] = useState<'home' | 'plan'>('home');
+  // The "Getting Trip Ready" popup shown while a recent or saved place is turned into a route.
+  const [quickLoading, setQuickLoading] = useState(false);
 
   // Driver side: the cancel confirmation, the booked passenger, and the navigation preview.
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -80,19 +86,48 @@ export default function HomeScreen() {
   const [booked, setBooked] = useState<{ rideId: string; name: string | null } | null>(null);
   const [navigating, setNavigating] = useState(false);
 
-  // Driver: the route shown for a look ("Your route") before the trip is posted.
+  // The route shown for a look ("Your route") before a driver posts, or a rider searches.
   const [preview, setPreview] = useState<{
+    // Which role it was made for, so a role switch does not leave a stale preview behind.
+    driver: boolean;
     route: Pt[];
     start: Pt;
     end: Pt;
     distanceKm: number;
     durationMin: number;
   } | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewMsg, setPreviewMsg] = useState('');
 
-  const passenger = usePassengerFlow(userId);
+  // Rider: the driver tapped in the "Available drivers" list.
+  const [chosenId, setChosenId] = useState<string | null>(null);
+
+  // Rider: "See others" has opened the full list; otherwise only the best match is shown.
+  const [listOpen, setListOpen] = useState(false);
+  // Notifications (errors and confirmations) are shown by the app-wide banner.
+  const notify = useNotify();
+
+  // Home, Work or School was tapped before an address was saved for it.
+  function onUnsetSaved(label: string) {
+    notify({
+      kind: 'alert',
+      title: 'No location saved',
+      subtitle: `Set your ${label} address in Saved Trips.`,
+    });
+  }
+
+  // The driver said yes: go Home and say so.
+  function onBooked(name: string) {
+    setListOpen(false);
+    closePlan();
+    notify({
+      kind: 'success',
+      title: 'Trip Successfully Booked!',
+      subtitle: name ? `${name} will pick you up soon` : 'Your driver will pick you up soon',
+    });
+  }
+
+  const passenger = usePassengerFlow(userId, onBooked);
   const driver = useDriverFlow(userId, driverMode);
+  const places = useSavedTrips(userId);
 
   // Passenger view drops any trip being shown. (Driver view re-checks it when Home opens.)
   useEffect(() => {
@@ -115,7 +150,11 @@ export default function HomeScreen() {
     transform: [{ translateY: sheetPosition.get() - 25 }],
   }));
   const toggleStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetPosition.get() - 76 }],
+    transform: [{ translateY: sheetPosition.get() - 84 }],
+  }));
+  // A message from posting a trip or finding a driver floats just above the sheet's top edge.
+  const noticeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetPosition.get() }],
   }));
 
   useEffect(() => {
@@ -156,44 +195,139 @@ export default function HomeScreen() {
 
   const bookedNow = booked && booked.rideId === tripId ? booked : null;
 
+  // Rider: look for drivers on the previewed route. The list takes over the screen when found.
   async function onFind() {
     Keyboard.dismiss();
     driver.clear();
-    const found = await passenger.search(pickup, destination, when ?? new Date());
-    if (found) sheetRef.current?.snapToIndex(SNAP.FULL);
-  }
-
-  // Driver: look up both places and draw the route, without posting anything yet.
-  async function onPreview() {
-    Keyboard.dismiss();
-    passenger.clear();
-    setPreviewMsg('');
-    setPreviewLoading(true);
-    try {
-      const start = await resolveStart(pickup);
-      const end = await resolveDestination(destination);
-      if (!end) {
-        setPreviewMsg('Enter a destination.');
-        return;
-      }
-      if (!start) {
-        setPreviewMsg('Could not find your starting point. Try adding the city, or allow location.');
-        return;
-      }
-      const r = await getRoute([start, end]);
-      if (!r) {
-        setPreviewMsg('No road route found between those places.');
-        return;
-      }
-      setPreview({ route: r.points, start, end, distanceKm: r.distanceKm, durationMin: r.durationMin });
-      sheetRef.current?.snapToIndex(SNAP.TRIP);
-    } catch (e) {
-      console.error(e);
-      setPreviewMsg(errText(e));
-    } finally {
-      setPreviewLoading(false);
+    setChosenId(null);
+    setListOpen(false);
+    // Reuse the start and end the route preview already found.
+    const known = preview ? { from: preview.start, to: preview.end } : undefined;
+    const found = await passenger.search(pickup, destination, when ?? new Date(), known);
+    if (found === 'none') {
+      notify({ kind: 'alert', title: "No Driver's available.", subtitle: 'Try again Later.' });
     }
   }
+
+  // Look up both places and draw the route, without posting or searching yet.
+  const SAME_PLACE = { title: 'Start and end are the same', subtitle: 'Choose a different start or end.' };
+
+  // Returns null once the route is showing, or the notification to show if it could not be drawn.
+  async function previewTrip(
+    fromText: string,
+    toText: string,
+    // Which role the preview is for; defaults to the one currently selected.
+    asDriver?: boolean,
+  ): Promise<{ title: string; subtitle?: string } | null> {
+    Keyboard.dismiss();
+    passenger.clear();
+    // A blank start means "where I am now".
+    const usesCurrent = !fromText.trim() || isCurrentLabel(fromText);
+    const noCurrent = {
+      title: 'Current Location could not be found',
+      subtitle: 'Make sure location is turned on.',
+    };
+    try {
+      const start = await resolveStart(fromText);
+      const end = await resolveDestination(toText);
+      if (!end) {
+        return isCurrentLabel(toText) ? noCurrent : { title: 'Enter a destination', subtitle: 'Type where you are going.' };
+      }
+      if (!start) {
+        return usesCurrent ? noCurrent : { title: 'Starting point not found', subtitle: 'Try adding the city.' };
+      }
+      // Two different names for the same spot count as the same place too.
+      if (haversineKm(start, end) < 0.05) return SAME_PLACE;
+      const r = await getRoute([start, end]);
+      if (!r) return { title: 'No road route found', subtitle: 'Try different places.' };
+      setPreview({
+        driver: asDriver ?? driverMode,
+        route: r.points,
+        start,
+        end,
+        distanceKm: r.distanceKm,
+        durationMin: r.durationMin,
+      });
+      sheetRef.current?.snapToIndex(SNAP.TRIP);
+      return null;
+    } catch (e) {
+      console.warn(e);
+      const message = errText(e);
+      if (usesCurrent && /location/i.test(message)) return noCurrent;
+      return { title: 'Could not open the route', subtitle: message };
+    }
+  }
+
+  // Check the places first (an empty destination is refused at once, with no spinner), then show
+  // the "Getting Trip Ready" popup while the route is looked up. Problems come back as a
+  // notification. Returns true once the route preview is showing.
+  async function startPreview(fromText: string, toText: string, asDriver?: boolean): Promise<boolean> {
+    if (!toText.trim()) {
+      Keyboard.dismiss();
+      notify({ kind: 'alert', title: 'Enter a destination', subtitle: 'Type where you are going.' });
+      return false;
+    }
+    // A blank Start is "Current location". The same name in both cells is refused at once.
+    if ((fromText.trim() || CURRENT_LABEL).toLowerCase() === toText.trim().toLowerCase()) {
+      Keyboard.dismiss();
+      notify({ kind: 'alert', ...SAME_PLACE });
+      return false;
+    }
+    setQuickLoading(true);
+    const problem = await previewTrip(fromText, toText, asDriver);
+    setQuickLoading(false);
+    if (problem) {
+      notify({ kind: 'alert', ...problem });
+      return false;
+    }
+    return true;
+  }
+
+  // "Preview route" on the form.
+  function onPreview() {
+    startPreview(pickup, destination);
+  }
+
+  // A recent trip or saved place (Home, Work, School) was tapped on the Home sheet: start from the
+  // user's current location, go to that place, and open the route preview. Back from the preview
+  // returns to the Book/Plan page with that place as the destination.
+  async function onPickRecentTrip(place: string) {
+    setPickup('');
+    setDestination(place);
+    const ok = await startPreview('', place);
+    if (ok) {
+      setView('plan');
+    } else {
+      setDestination('');
+    }
+  }
+
+  // "Redo" on a previous trip: same start and end, in the role the user had on that trip. Shows the
+  // loading popup, then the route preview. Back goes to the Plan/Book page, and Back again to Home.
+  async function redoTrip(startText: string, endText: string, asDriver: boolean) {
+    setPickup(startText);
+    setDestination(endText);
+    if (asDriver !== driverMode) await choose(asDriver);
+    const ok = await startPreview(startText, endText, asDriver);
+    if (ok) {
+      setView('plan');
+    } else {
+      setPickup('');
+      setDestination('');
+    }
+  }
+
+  // The Previous Trips tab sends a trip here to redo. It is read once, then cleared.
+  const redoParams = useLocalSearchParams<{ redo?: string; from?: string; to?: string; role?: string }>();
+  useFocusEffect(
+    useCallback(() => {
+      if (!redoParams.redo || !redoParams.to) return;
+      const { from, to, role } = redoParams;
+      router.setParams({ redo: undefined, from: undefined, to: undefined, role: undefined });
+      redoTrip(from ?? '', to, role !== 'rider');
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [redoParams.redo]),
+  );
 
   // Post the trip being previewed. The preview goes away once it is posted.
   async function onPost() {
@@ -204,24 +338,61 @@ export default function HomeScreen() {
   }
 
   const active = !!driver.trip || passenger.results.length > 0 || !!passenger.msg || !!driver.msg;
-  function clearAll() {
-    Keyboard.dismiss();
+  // Empty the form and anything it produced, leaving the sheet where it is.
+  function clearFields() {
     passenger.clear();
     driver.clear();
+    setChosenId(null);
     setPreview(null);
-    setPreviewMsg('');
     setPickup('');
     setDestination('');
+  }
+  // Same, but also closes the keyboard and lowers the sheet (used when leaving the plan view).
+  function clearAll() {
+    Keyboard.dismiss();
+    clearFields();
     sheetRef.current?.snapToIndex(SNAP.MID);
   }
 
-  // Previews only exist for drivers, and give way to a posted trip.
-  const previewNow = driverMode && !driver.trip ? preview : null;
+  // Rider: the list of matching drivers replaces everything else.
+  const hasResults = !driverMode && passenger.results.length > 0;
+  const showResults = hasResults && listOpen;
+  // The best match is shown over the preview; "See others" opens the full list.
+  const showMatch = hasResults && !listOpen;
+  const best = pickBest(passenger.results, () => (preview ? preview.distanceKm * PRICE_PER_KM : 0));
+  const previewNow = preview && preview.driver === driverMode && !driver.trip && !showResults ? preview : null;
   const showTrip = !!driver.trip;
   const showPreview = !!previewNow;
+  const ridePrice = preview ? preview.distanceKm * PRICE_PER_KM : undefined;
+  const priceText = preview ? `$${(preview.distanceKm * PRICE_PER_KM).toFixed(2)}` : '';
 
   // A posted trip, a route preview or a set of results always shows the plan view.
   const showPlan = view === 'plan' || active || showPreview;
+
+  // Back from the driver list returns to the route preview.
+  function backToPreview() {
+    passenger.clear();
+    setChosenId(null);
+    setListOpen(false);
+  }
+
+  // Confirm on the best match card.
+  function confirmBest() {
+    if (best) passenger.request(best, ridePrice, destination);
+  }
+
+  // Confirm on the driver list: ask the chosen driver. The "Confirming Ride" popup takes over.
+  function confirmDriver() {
+    const r = passenger.results.find((x) => x.rideId === chosenId);
+    if (r) passenger.request(r, ridePrice, destination);
+  }
+
+  // Closing the "Ride Accepted" notice ends the booking flow and goes home.
+  function closeNotice() {
+    const accepted = passenger.notice === 'accepted';
+    passenger.closeNotice();
+    if (accepted) closePlan();
+  }
 
   function openPlan(place?: string) {
     if (place) setDestination(place);
@@ -253,7 +424,7 @@ export default function HomeScreen() {
     } catch (e) {
       console.error(e);
       setConfirmCancel(false);
-      Alert.alert('Could not cancel', errText(e));
+      notify({ kind: 'alert', title: 'Could not cancel', subtitle: errText(e) });
     } finally {
       setCancelling(false);
     }
@@ -261,22 +432,26 @@ export default function HomeScreen() {
 
   // "End" in the navigation preview finishes the trip.
   async function endTrip() {
-    await driver.finish();
+    const problem = await driver.finish();
+    if (problem) {
+      // Stay on the navigation screen so the driver can try again.
+      notify({ kind: 'alert', title: 'Could not end the trip', subtitle: problem });
+      return;
+    }
+    // Back to the Home screen.
     setNavigating(false);
-    setView('home');
-    setPickup('');
-    setDestination('');
-    sheetRef.current?.snapToIndex(SNAP.MID);
+    closePlan();
+    notify({ kind: 'success', title: 'Trip Successfully Ended!' });
   }
 
   // What the map draws: the posted trip, or the driver being looked at.
-  const route = driver.trip?.route ?? previewNow?.route ?? passenger.selected?.route ?? [];
+  const route = driver.trip?.route ?? previewNow?.route ?? [];
   const markers: MapMarker[] = driver.trip
     ? driver.markers.map((m) => ({ ...m, color: colors.pickup }))
     : previewNow
     ? [
-        { id: 'start', point: previewNow.start, color: colors.ring },
-        { id: 'end', point: previewNow.end, color: colors.brand },
+        { id: 'start', point: previewNow.start, color: colors.brand },
+        { id: 'end', point: previewNow.end, color: colors.alert },
       ]
     : [
         ...(passenger.pickup ? [{ id: 'pickup', point: passenger.pickup, color: colors.brand }] : []),
@@ -289,7 +464,6 @@ export default function HomeScreen() {
     <GestureHandlerRootView style={styles.container}>
       <InteractiveMap
         route={route}
-        altRoute={passenger.alt}
         markers={markers}
         // Fit the route into the map area left visible above the sheet.
         padding={{
@@ -307,6 +481,18 @@ export default function HomeScreen() {
           durationMin={driver.trip?.durationMin ?? 0}
           onEnd={endTrip}
         />
+      ) : showResults ? (
+        <DriverList
+          drivers={passenger.results}
+          chosenId={chosenId}
+          onChoose={setChosenId}
+          priceText={priceText}
+          onBack={() => {
+            setChosenId(null);
+            setListOpen(false);
+          }}
+          onConfirm={confirmDriver}
+        />
       ) : (
         <>
           {/* The plan view dims the map; a posted trip keeps it clear with a title chip on top. */}
@@ -314,7 +500,13 @@ export default function HomeScreen() {
             <View pointerEvents='none' style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }]} />
           )}
           {showPreview ? (
-            <BackButton onPress={() => setPreview(null)} />
+            <BackButton
+              onPress={() => {
+                setPreview(null);
+                // Back to the form with the sheet still fully open.
+                sheetRef.current?.snapToIndex(SNAP.FULL);
+              }}
+            />
           ) : (
             (!showPlan || showTrip) && <MenuButton onPress={() => navigation.openDrawer()} />
           )}
@@ -347,8 +539,11 @@ export default function HomeScreen() {
             >
               {!showPlan ? (
                 <HomeSheetContent
-                  onPickRecent={(place) => openPlan(place)}
-                  onSaved={() => navigation.navigate('saved-trips')}
+                  recent={places.recent}
+                  saved={places.saved}
+                  onPickRecent={onPickRecentTrip}
+                  onPickSaved={onPickRecentTrip}
+                  onUnsetSaved={onUnsetSaved}
                 />
               ) : showTrip && driver.trip ? (
                 <TripSheet
@@ -369,15 +564,15 @@ export default function HomeScreen() {
                   startText={pickup}
                   endText={destination}
                   when={when}
-                  onPickDate={() => pickDateTime(when ?? new Date(), setWhen)}
+                  onPickDate={() => pickDate(when ?? new Date(), setWhen)}
+                  onPickTime={() => pickTime(when ?? new Date(), setWhen)}
                   distanceKm={previewNow.distanceKm}
                   durationMin={previewNow.durationMin}
-                  maxDivergenceKm={mdd}
-                  onMaxDivergence={() => setMddOpen(true)}
-                  submitLabel='Post trip'
-                  onSubmit={onPost}
-                  loading={driver.loading}
-                  message={driver.msg}
+                  maxDivergenceKm={driverMode ? mdd : undefined}
+                  onMaxDivergence={driverMode ? () => setMddOpen(true) : undefined}
+                  submitLabel={driverMode ? 'Post trip' : 'Find driver'}
+                  onSubmit={driverMode ? onPost : onFind}
+                  loading={driverMode ? driver.loading : passenger.loading}
                 />
               ) : (
                 <>
@@ -394,59 +589,50 @@ export default function HomeScreen() {
                     destination={destination}
                     onDestination={setDestination}
                     onFocusField={() => sheetRef.current?.snapToIndex(SNAP.FULL)}
-                    showClear={!!pickup || !!destination || active}
-                    onClear={clearAll}
-                    maxDivergenceKm={driverMode ? mdd : undefined}
-                    onMaxDivergence={driverMode ? () => setMddOpen(true) : undefined}
-                    submitLabel={driverMode ? 'Preview route' : 'Find driver'}
-                    onSubmit={driverMode ? onPreview : onFind}
-                    loading={driverMode ? previewLoading : passenger.loading}
-                    onPickRecent={(place) => setDestination(place)}
-                    onSaved={() => navigation.navigate('saved-trips')}
+                    onClear={clearFields}
+                    submitLabel='Preview route'
+                    onSubmit={onPreview}
+                    loading={quickLoading}
+                    recent={places.recent}
+                    saved={places.saved}
+                    onUnsetSaved={onUnsetSaved}
                   />
 
-                  {!!(message || previewMsg) && <Text style={styles.message}>{previewMsg || message}</Text>}
-
-                  {/* Passenger: matching drivers, or just the one being looked at. */}
-                  {passenger.selected ? (
-                    <View style={styles.list}>
-                      <DriverCard
-                        item={passenger.selected}
-                        selected
-                        extra={passenger.extra}
-                        sent={passenger.sentTo === passenger.selected.rideId}
-                        accepted={passenger.accepted && passenger.sentTo === passenger.selected.rideId}
-                        onSelect={() => {}}
-                        onRequest={() => passenger.request(passenger.selected!)}
-                      />
-                      <Pressable onPress={passenger.back}>
-                        <Text style={styles.link}>Back to all drivers</Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    passenger.results.length > 0 && (
-                      <View style={styles.list}>
-                        {passenger.results.map((r) => (
-                          <DriverCard
-                            key={r.rideId}
-                            item={r}
-                            selected={false}
-                            extra={null}
-                            sent={false}
-                            onSelect={() => {
-                              passenger.select(r);
-                              sheetRef.current?.snapToIndex(SNAP.MID);
-                            }}
-                            onRequest={() => {}}
-                          />
-                        ))}
-                      </View>
-                    )
-                  )}
+                  {!!message && <InlineNotice message={message} style={styles.message} />}
                 </>
               )}
             </BottomSheetScrollView>
           </BottomSheet>
+
+          {/* Best match: dims the screen and floats the card over the route preview. */}
+          {showMatch && best && (
+            <View style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: colors.scrim,
+                  justifyContent: 'flex-end',
+                  paddingHorizontal: 20,
+                  paddingBottom: windowHeight * 0.3,
+                },
+              ]}>
+              <DriverMatchCard
+                driver={best}
+                avatarIndex={avatarSlot(Math.max(0, passenger.results.indexOf(best)))}
+                priceText={priceText}
+                hasOthers={passenger.results.length > 1}
+                onSeeOthers={() => setListOpen(true)}
+                onCancel={backToPreview}
+                onConfirm={confirmBest}
+              />
+            </View>
+          )}
+
+          {/* Post trip / Find driver problems: a card above the sheet, outside it. */}
+          {showPreview && !!message && !showMatch && (
+            <Animated.View pointerEvents='box-none' style={[styles.notice, noticeStyle]}>
+              <InlineNotice message={message} style={styles.noticeCard} />
+            </Animated.View>
+          )}
 
           {/* Drawn after the sheet so they sit on top of its edge. */}
           {!showPlan && (
@@ -463,11 +649,23 @@ export default function HomeScreen() {
       )}
 
       {/* Passenger: spinner while waiting for the driver, then accepted or declined. */}
+      {/* Looking for drivers after Find driver. */}
+      <LoadingPopup visible={quickLoading} title='Getting Trip Ready' />
+      <LoadingPopup visible={driverMode && driver.loading} title='Posting Trip' />
+
+      <LoadingPopup
+        visible={passenger.loading && !driverMode}
+        title='Finding drivers'
+        subtitle='Matching you with nearby drivers'
+      />
+
+
       <RideStatusPopup
+        driverName={passenger.results.find((x) => x.rideId === passenger.sentTo)?.driverName}
         confirming={passenger.confirming}
         notice={passenger.notice}
         onCancel={passenger.cancel}
-        onClose={passenger.closeNotice}
+        onClose={closeNotice}
       />
 
       <ConfirmDialog
@@ -515,7 +713,10 @@ const makeStyles = (c: Colors) =>
     homeContent: { paddingTop: 21 },
     toggle: { position: 'absolute', top: 0, right: 16 },
     pill: { position: 'absolute', top: 0, left: 16, right: 16 },
-    message: { fontFamily: fonts.regular, fontSize: 13, color: c.textSecondary, marginTop: 8 },
+    message: { marginTop: 12 },
+    // Zero-height row at the sheet's top edge; the card hangs upward from it.
+    notice: { position: 'absolute', top: 0, left: 16, right: 16, height: 0 },
+    noticeCard: { position: 'absolute', left: 0, right: 0, bottom: 12 },
     list: { gap: 10, marginTop: 10 },
     link: { fontFamily: fonts.semibold, color: c.brand, marginTop: 12 },
   });

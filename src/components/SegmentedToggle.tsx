@@ -23,10 +23,13 @@ type Props<T extends string> = {
   disabled?: boolean;
   // Icon-only round segments. Otherwise the segments share the width and show their labels.
   compact?: boolean;
+  // Compact only: width and height of each round segment (default 32).
+  segment?: number;
   style?: StyleProp<ViewStyle>;
 };
 
 const PADDING = 4;
+const BORDER = 1;
 
 // Segmented switch whose blue thumb slides to the chosen option.
 export default function SegmentedToggle<T extends string>({
@@ -35,6 +38,7 @@ export default function SegmentedToggle<T extends string>({
   onChange,
   disabled,
   compact,
+  segment = 32,
   style,
 }: Props<T>) {
   const { colors } = useTheme();
@@ -42,7 +46,9 @@ export default function SegmentedToggle<T extends string>({
 
   const [width, setWidth] = useState(0);
   const index = Math.max(0, options.findIndex((o) => o.key === value));
-  const thumbWidth = width > 0 ? (width - PADDING * 2) / options.length : 0;
+  // The track's width includes its 1px border on each side, which the segments do not use. Leaving
+  // it out keeps the blue thumb exactly the size of a segment, so each icon sits in its centre.
+  const thumbWidth = width > 0 ? (width - BORDER * 2 - PADDING * 2) / options.length : 0;
 
   const x = useSharedValue(0);
   const placed = useRef(false);
@@ -73,12 +79,12 @@ export default function SegmentedToggle<T extends string>({
         return (
           <Pressable
             key={o.key}
-            style={compact ? styles.segmentCompact : styles.segmentWide}
+            style={compact ? [styles.segmentCompact, { width: segment, height: segment }] : styles.segmentWide}
             onPress={() => onChange(o.key)}
             disabled={disabled}
-            hitSlop={compact ? 4 : undefined}
+            hitSlop={compact ? (segment > 32 ? 8 : 4) : undefined}
           >
-            <Icon name={o.icon} size={compact ? 18 : 20} color={color} />
+            <Icon name={o.icon} size={compact ? Math.round(segment * 0.56) : 20} color={color} />
             {!!o.label && <Text style={[styles.label, { color }]}>{o.label}</Text>}
           </Pressable>
         );
@@ -93,7 +99,7 @@ const makeStyles = (c: Colors) =>
       flexDirection: 'row',
       padding: PADDING,
       borderRadius: 24,
-      borderWidth: 1,
+      borderWidth: BORDER,
       borderColor: c.border,
     },
     trackCompact: { backgroundColor: c.surface },

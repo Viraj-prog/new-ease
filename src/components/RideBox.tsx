@@ -2,7 +2,8 @@ import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import PressButton from '@/components/PressButton';
 
 type Props = {
   start: string;
@@ -60,16 +61,16 @@ export default function RideBox({
       </View>
 
       <View style={styles.buttons}>
-        <Pressable
+        <PressButton
           style={[styles.button, styles.flex, viewDisabled && styles.disabled]}
           onPress={onView}
           disabled={viewDisabled}
         >
           <Text style={[styles.buttonText, viewDisabled && styles.disabledText]}>{viewLabel}</Text>
-        </Pressable>
-        <Pressable style={[styles.button, styles.cancel, styles.flex]} onPress={onCancel}>
+        </PressButton>
+        <PressButton ghost style={[styles.button, styles.cancel, styles.flex]} onPress={onCancel}>
           <Text style={[styles.buttonText, styles.cancelText]}>Cancel ride</Text>
-        </Pressable>
+        </PressButton>
       </View>
     </View>
   );

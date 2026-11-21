@@ -8,6 +8,7 @@ import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text } from 'react-native';
+import { useNotify } from '@/lib/notify';
 
 type Status = 'verifying' | 'ready' | 'invalid';
 
@@ -17,6 +18,7 @@ function readFragment(url: string) {
 }
 
 export default function ResetPasswordScreen() {
+  const notify = useNotify();
   const { session, beginRecovery, endRecovery } = useAuth();
   const url = Linking.useLinkingURL();
   const [status, setStatus] = useState<Status>('verifying');
@@ -66,7 +68,7 @@ export default function ResetPasswordScreen() {
   async function submit() {
     const problem = passwordProblem(password, confirm);
     if (problem) {
-      Alert.alert(...problem);
+      notify({ kind: 'alert', title: problem[0], subtitle: problem[1] });
       return;
     }
     setBusy(true);
@@ -79,7 +81,7 @@ export default function ResetPasswordScreen() {
         { text: 'OK', onPress: () => router.replace('/') },
       ]);
     } catch (err) {
-      Alert.alert('Could not update password', errText(err));
+      notify({ kind: 'alert', title: 'Could not update password', subtitle: errText(err) });
     } finally {
       setBusy(false);
     }

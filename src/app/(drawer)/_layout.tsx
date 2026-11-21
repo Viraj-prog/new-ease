@@ -9,8 +9,9 @@ import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
 import { Drawer, type DrawerContentComponentProps } from 'expo-router/drawer';
 import { useState, type ReactNode } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNotify } from '@/lib/notify';
 
 type Item = { route: string; label: string; icon: (color: string) => ReactNode };
 
@@ -19,6 +20,7 @@ function DrawerContent(props: DrawerContentComponentProps) {
   const styles = makeStyles(colors);
   const insets = useSafeAreaInsets();
   const { driverMode, switching, choose } = useRoleSwitch();
+  const notify = useNotify();
   const { profile } = useProfile();
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -33,10 +35,9 @@ function DrawerContent(props: DrawerContentComponentProps) {
 
   const items: Item[] = [
     { route: 'index', label: 'Home', icon: (c) => <Icon name='home' color={c} /> },
-    driverMode
-      ? { route: 'earnings', label: 'Earnings', icon: (c) => <Icon name='billing-card' color={c} /> }
-      : { route: 'billing', label: 'Billing', icon: (c) => <Icon name='billing-card' color={c} /> },
+    { route: 'wallet', label: 'Wallet', icon: (c) => <Icon name='billing-card' color={c} /> },
     { route: 'rides', label: 'Trips', icon: (c) => <Icon name='trips-route' color={c} /> },
+    { route: 'previous-trips', label: 'Previous Trips', icon: (c) => <Icon name='clock' color={c} /> },
     { route: 'saved-trips', label: 'Saved Trips', icon: (c) => <Icon name='saved-bookmark' color={c} /> },
     { route: 'profile', label: 'Profile', icon: (c) => <Icon name='profile' color={c} /> },
   ];
@@ -47,7 +48,7 @@ function DrawerContent(props: DrawerContentComponentProps) {
     if (error) {
       setLoggingOut(false);
       setConfirmVisible(false);
-      Alert.alert('Log out failed', error.message);
+      notify({ kind: 'alert', title: 'Log out failed', subtitle: error.message });
     }
   };
 

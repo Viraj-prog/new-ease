@@ -1,8 +1,9 @@
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import PopupShell from './PopupShell';
+import PressButton from '@/components/PressButton';
 
 export type Person = {
   // "Driver" or "Passenger"
@@ -32,9 +33,9 @@ export default function PersonPopup({ person, onClose }: { person: Person | null
               ))}
             </View>
           )}
-          <Pressable style={styles.button} onPress={onClose}>
+          <PressButton style={styles.button} onPress={onClose}>
             <Text style={styles.buttonText}>Close</Text>
-          </Pressable>
+          </PressButton>
         </>
       )}
     </PopupShell>
