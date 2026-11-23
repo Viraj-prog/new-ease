@@ -2,7 +2,7 @@ import * as Location from "expo-location";
 import type { Pt } from "./geo";
 
 // OpenStreetMap services require an identifying User-Agent. Put a real contact here.
-const UA = "CMPT496-Rideshare/1.0 (randeriav@mymacewan.ca)";
+export const UA = "CMPT496-Rideshare/1.0 (randeriav@mymacewan.ca)";
 
 // Nominatim allows about 1 request per second, so we space calls out.
 let lastGeocode = 0;

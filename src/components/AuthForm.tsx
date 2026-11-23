@@ -17,6 +17,7 @@ import {
   type TextInputProps,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import PressButton from '@/components/PressButton';
 
 // Shared pieces of the log in, sign up and password screens. Fields and the submit
 // button look slightly different inside a blue card than on a plain page.
@@ -117,9 +118,9 @@ export function SubmitButton({
   const look = looks[useContext(LookContext)];
   if (busy) return <ActivityIndicator color={colors.brand} style={look.spinner} />;
   return (
-    <Pressable style={[styles.button, look.button]} onPress={onPress}>
+    <PressButton style={[styles.button, look.button]} onPress={onPress}>
       <Text style={styles.buttonText}>{label}</Text>
-    </Pressable>
+    </PressButton>
   );
 }
 

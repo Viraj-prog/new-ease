@@ -8,11 +8,12 @@ import {
   sendRequest,
   type Result,
 } from '@/lib/rides';
+import { recordRequestDetails } from '@/lib/previousTrips';
 import { getRoute } from '@/lib/routing';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Passenger side: search drivers, look at one, and ask for a ride.
-export function usePassengerFlow(userId: string | undefined) {
+export function usePassengerFlow(userId: string | undefined, onAccepted?: (driverName: string) => void) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [results, setResults] = useState<Result[]>([]);
@@ -29,6 +30,13 @@ export function usePassengerFlow(userId: string | undefined) {
   // Result popup shown once when the driver answers.
   const [notice, setNotice] = useState<'accepted' | 'declined' | null>(null);
 
+  // Who the request went to, and what to do when they accept (kept in refs so the timer sees the latest).
+  const sentName = useRef('');
+  const acceptedRef = useRef(onAccepted);
+  useEffect(() => {
+    acceptedRef.current = onAccepted;
+  });
+
   // While a request is waiting, check every 8 seconds whether the driver answered.
   useEffect(() => {
     if (!requestId || status !== 'pending') return;
@@ -40,7 +48,7 @@ export function usePassengerFlow(userId: string | undefined) {
         if (cancelled) return;
         if (s === 'accepted') {
           setStatus('accepted');
-          setNotice('accepted');
+          acceptedRef.current?.(sentName.current);
         } else if (s === 'declined' || s === 'cancelled') {
           setStatus('declined');
           setSentTo(null);
@@ -71,21 +79,28 @@ export function usePassengerFlow(userId: string | undefined) {
     setNotice(null);
   }
 
-  // Returns true when at least one driver matched.
-  async function search(fromText: string, toText: string, when: Date): Promise<boolean> {
-    if (!userId) return false;
+  // 'found' when at least one driver matched, 'none' when nobody did.
+  async function search(
+    fromText: string,
+    toText: string,
+    when: Date,
+    // The places a route preview already found. Passing them skips looking them up again,
+    // which for a blank start would ask the phone for its location a second time.
+    known?: { from: Pt; to: Pt },
+  ): Promise<'found' | 'none' | 'error'> {
+    if (!userId) return 'error';
     clear();
     setLoading(true);
     try {
-      const from = await resolveStart(fromText);
-      const to = await resolveDestination(toText);
+      const from = known?.from ?? (await resolveStart(fromText));
+      const to = known?.to ?? (await resolveDestination(toText));
       if (!to) {
         setMsg('Enter a destination.');
-        return false;
+        return 'error';
       }
       if (!from) {
         setMsg('Could not find your starting point. Try adding the city, or allow location.');
-        return false;
+        return 'error';
       }
       setPickup(from);
       setDropoff(to);
@@ -94,12 +109,11 @@ export function usePassengerFlow(userId: string | undefined) {
 
       const list = await searchRides(from, to, when, userId);
       setResults(list);
-      if (list.length === 0) setMsg('No drivers on your route for that time.');
-      return list.length > 0;
+      return list.length > 0 ? 'found' : 'none';
     } catch (e) {
       console.error(e);
       setMsg(errText(e));
-      return false;
+      return 'error';
     } finally {
       setLoading(false);
     }
@@ -124,10 +138,14 @@ export function usePassengerFlow(userId: string | undefined) {
     setExtra(null);
   }
 
-  async function request(r: Result) {
+  // `price` and `dropoffText` (where the rider is going) are saved on the request, for Previous
+  // Trips and Recent trips.
+  async function request(r: Result, price?: number, dropoffText?: string) {
     if (!requestId) return;
     try {
       await sendRequest(requestId, r);
+      sentName.current = r.driverName;
+      recordRequestDetails(requestId, { price, dropoffText });
       setSentTo(r.rideId);
       setStatus('pending');
       setMsg('');

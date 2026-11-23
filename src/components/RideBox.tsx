@@ -1,6 +1,9 @@
-import { colors } from '@/styles/global';
+import { useTheme } from '@/lib/theme';
+import { fonts } from '@/styles/fonts';
+import { type Colors } from '@/styles/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import PressButton from '@/components/PressButton';
 
 type Props = {
   start: string;
@@ -28,6 +31,9 @@ export default function RideBox({
   onView,
   onCancel,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+
   return (
     <View style={styles.box}>
       {(when || badge) && (
@@ -48,57 +54,62 @@ export default function RideBox({
         </Text>
       </View>
       <View style={styles.place}>
-        <Ionicons name='flag' size={18} color='#dc2626' />
+        <Ionicons name='flag' size={18} color={colors.alert} />
         <Text style={styles.placeText} numberOfLines={2}>
           {end}
         </Text>
       </View>
 
       <View style={styles.buttons}>
-        <Pressable
+        <PressButton
           style={[styles.button, styles.flex, viewDisabled && styles.disabled]}
           onPress={onView}
           disabled={viewDisabled}
         >
-          <Text style={styles.buttonText}>{viewLabel}</Text>
-        </Pressable>
-        <Pressable style={[styles.button, styles.cancel, styles.flex]} onPress={onCancel}>
-          <Text style={styles.buttonText}>Cancel ride</Text>
-        </Pressable>
+          <Text style={[styles.buttonText, viewDisabled && styles.disabledText]}>{viewLabel}</Text>
+        </PressButton>
+        <PressButton ghost style={[styles.button, styles.cancel, styles.flex]} onPress={onCancel}>
+          <Text style={[styles.buttonText, styles.cancelText]}>Cancel ride</Text>
+        </PressButton>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  box: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 16,
-    gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  when: { fontSize: 12, color: '#6b6b6b' },
-  badge: { backgroundColor: '#d4d4d8', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeText: { fontSize: 11, color: '#3f3f46', fontWeight: '600' },
-  badgeGreen: { backgroundColor: '#dcf5e3' },
-  badgeTextGreen: { color: '#1f9d45' },
-  place: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  placeText: { flex: 1, fontSize: 15, color: colors.text },
-  buttons: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  flex: { flex: 1 },
-  button: {
-    backgroundColor: colors.brand,
-    borderRadius: 14,
-    paddingVertical: 11,
-    alignItems: 'center',
-  },
-  cancel: { backgroundColor: colors.alert },
-  disabled: { backgroundColor: '#b8b8b8' },
-  buttonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    box: {
+      backgroundColor: c.card,
+      borderRadius: 18,
+      padding: 16,
+      gap: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      shadowColor: c.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 6,
+      elevation: 3,
+    },
+    topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    when: { fontFamily: fonts.regular, fontSize: 12, color: c.textSecondary },
+    badge: { backgroundColor: c.pill, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+    badgeText: { fontFamily: fonts.semibold, fontSize: 11, color: c.textSecondary },
+    badgeGreen: { backgroundColor: c.successTint },
+    badgeTextGreen: { color: c.onSuccessTint },
+    place: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    placeText: { flex: 1, fontFamily: fonts.medium, fontSize: 15, color: c.text },
+    buttons: { flexDirection: 'row', gap: 10, marginTop: 4 },
+    flex: { flex: 1 },
+    button: {
+      backgroundColor: c.brand,
+      borderRadius: 14,
+      paddingVertical: 11,
+      alignItems: 'center',
+    },
+    cancel: { backgroundColor: c.alert },
+    disabled: { backgroundColor: c.pill },
+    buttonText: { fontFamily: fonts.semibold, color: c.onBrand, fontSize: 14 },
+    cancelText: { color: c.onAlert },
+    disabledText: { color: c.textSecondary },
+  });

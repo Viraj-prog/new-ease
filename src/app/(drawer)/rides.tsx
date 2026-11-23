@@ -1,16 +1,17 @@
+import MenuButton from '@/components/MenuButton';
 import PersonPopup, { type Person } from '@/components/PersonPopup';
 import RideBox from '@/components/RideBox';
 import { useMyRides } from '@/hooks/useMyRides';
 import { useAuth } from '@/lib/auth';
-import { colors } from '@/styles/global';
-import { Image } from 'expo-image';
+import { useTheme } from '@/lib/theme';
+import { fonts } from '@/styles/fonts';
+import { type Colors } from '@/styles/theme';
 import { useNavigation } from 'expo-router';
 import { type DrawerNavigationProp } from 'expo-router/drawer';
 import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -18,6 +19,10 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNotify } from '@/lib/notify';
+import InlineNotice from '@/components/InlineNotice';
+
+
 
 function whenText(iso: string | null) {
   if (!iso) return null;
@@ -31,8 +36,11 @@ function whenText(iso: string | null) {
 }
 
 export default function RidesScreen() {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const navigation = useNavigation<DrawerNavigationProp<Record<string, undefined>>>();
   const insets = useSafeAreaInsets();
+  const notify = useNotify();
   const { session, isDriver } = useAuth();
   const { posted, booked, loading, error, reload, cancelPosted, cancelBooked } = useMyRides(
     session?.user.id,
@@ -56,7 +64,7 @@ export default function RidesScreen() {
         style: 'destructive',
         onPress: async () => {
           const problem = await run();
-          if (problem) Alert.alert('Could not cancel', problem);
+          if (problem) notify({ kind: 'alert', title: 'Could not cancel', subtitle: problem });
         },
       },
     ]);
@@ -74,7 +82,7 @@ export default function RidesScreen() {
           <ActivityIndicator color={colors.brand} style={styles.loading} />
         ) : (
           <>
-            {!!error && <Text style={styles.error}>{error}</Text>}
+            {!!error && <InlineNotice message={error} style={styles.error} />}
 
             {isDriver && (
               <>
@@ -152,31 +160,20 @@ export default function RidesScreen() {
         )}
       </ScrollView>
 
-      <Pressable
-        onPress={() => navigation.openDrawer()}
-        style={[styles.menu, { top: insets.top + 8 }]}
-        hitSlop={8}
-      >
-        <Image
-          source={require('../../../assets/images/menuButton.png')}
-          style={styles.menuIcon}
-          contentFit='contain'
-        />
-      </Pressable>
+      <MenuButton onPress={() => navigation.openDrawer()} />
 
       <PersonPopup person={person} onClose={() => setPerson(null)} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f6f8' },
-  menu: { position: 'absolute', left: 12 },
-  menuIcon: { width: 70, height: 70 },
-  title: { fontSize: 32, fontWeight: '700', color: colors.text },
-  section: { fontSize: 18, fontWeight: '600', color: colors.text, marginTop: 24, marginBottom: 10 },
-  list: { gap: 14 },
-  empty: { fontSize: 14, color: '#777' },
-  error: { color: colors.alert, marginTop: 10 },
-  loading: { marginTop: 40 },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    list: { gap: 14 },
+    error: { marginTop: 10 },
+    loading: { marginTop: 40 },
+    title: { fontFamily: fonts.titleSemibold, fontSize: 32, color: c.text },
+    section: { fontFamily: fonts.semibold, fontSize: 18, color: c.text, marginTop: 24, marginBottom: 10 },
+    empty: { fontFamily: fonts.regular, fontSize: 14, color: c.textSecondary },
+  });

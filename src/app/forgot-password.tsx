@@ -6,8 +6,10 @@ import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, StyleSheet, Text } from 'react-native';
+import { useNotify } from '@/lib/notify';
 
 export default function ForgotPasswordScreen() {
+  const notify = useNotify();
   // The login screen passes along whatever the user already typed.
   const params = useLocalSearchParams<{ email?: string }>();
   const [email, setEmail] = useState(params.email ?? '');
@@ -15,7 +17,7 @@ export default function ForgotPasswordScreen() {
 
   async function sendLink() {
     if (!email.trim()) {
-      Alert.alert('Enter your email', 'Type the email you signed up with.');
+      notify({ kind: 'alert', title: 'Enter your email', subtitle: 'Type the email you signed up with.' });
       return;
     }
     setBusy(true);
@@ -31,7 +33,7 @@ export default function ForgotPasswordScreen() {
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (err) {
-      Alert.alert('Could not send reset email', errText(err));
+      notify({ kind: 'alert', title: 'Could not send reset email', subtitle: errText(err) });
     } finally {
       setBusy(false);
     }

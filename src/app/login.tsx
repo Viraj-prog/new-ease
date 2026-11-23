@@ -4,16 +4,18 @@ import { supabase } from '@/lib/supabase';
 import { colors } from '@/styles/global';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useNotify } from '@/lib/notify';
 
 export default function LoginScreen() {
+  const notify = useNotify();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
   function validate() {
     if (!email.trim() || !password) {
-      Alert.alert('Missing info', 'Enter your email and password.');
+      notify({ kind: 'alert', title: 'Missing info', subtitle: 'Enter your email and password.' });
       return false;
     }
     return true;
@@ -26,7 +28,7 @@ export default function LoginScreen() {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) throw error;
     } catch (err) {
-      Alert.alert('Login failed', errText(err));
+      notify({ kind: 'alert', title: 'Login failed', subtitle: errText(err) });
     } finally {
       setBusy(false);
     }

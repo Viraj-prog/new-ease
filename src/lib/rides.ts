@@ -402,7 +402,7 @@ export async function loadBookedRides(passengerId: string): Promise<BookedRide[]
     .from('ride_requests')
     .select(
       `id, status, selectedRideId,
-       rides ( rideId, driverStartLocation, driverEndLocation, departAt,
+       rides ( rideId, driverStartLocation, driverEndLocation, departAt, isCompleted,
                drivers ( driverRating, users ( firstName, lastName ) ) )`,
     )
     .eq('passengerId', passengerId)
@@ -417,6 +417,7 @@ export async function loadBookedRides(passengerId: string): Promise<BookedRide[]
       driverStartLocation: string;
       driverEndLocation: string;
       departAt: string | null;
+      isCompleted: boolean | null;
       drivers: {
         driverRating: number | null;
         users: { firstName: string | null; lastName: string | null } | null;
@@ -426,7 +427,8 @@ export async function loadBookedRides(passengerId: string): Promise<BookedRide[]
 
   const list: BookedRide[] = [];
   for (const r of (data ?? []) as unknown as Row[]) {
-    if (!r.rides) continue;
+    // A finished ride moves to the Previous Trips tab.
+    if (!r.rides || r.rides.isCompleted) continue;
     const u = r.rides.drivers?.users;
     const name = u ? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() : '';
     list.push({

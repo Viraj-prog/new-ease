@@ -1,6 +1,10 @@
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { ThemeProvider } from '@/lib/theme';
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { NotificationProvider } from '@/lib/notify';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -29,9 +33,22 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  const [loaded, error] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+  });
+
+  // Keep the splash screen up until fonts are ready. If loading fails, carry on with system fonts.
+  if (!loaded && !error) return null;
+
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <NotificationProvider>
+          <RootNavigator />
+        </NotificationProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

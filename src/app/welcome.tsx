@@ -1,7 +1,8 @@
 import { colors } from '@/styles/global';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import PressButton from '@/components/PressButton';
 
 export default function WelcomeScreen() {
   return (
@@ -12,9 +13,9 @@ export default function WelcomeScreen() {
         contentFit='contain'
       />
       <Text style={styles.title}>Account Successfully Created!</Text>
-      <Pressable style={styles.button} onPress={() => router.replace('/')}>
+      <PressButton style={styles.button} onPress={() => router.replace('/')}>
         <Text style={styles.buttonText}>Start Riding</Text>
-      </Pressable>
+      </PressButton>
     </View>
   );
 }
