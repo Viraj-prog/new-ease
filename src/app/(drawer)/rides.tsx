@@ -1,8 +1,10 @@
+import InlineNotice from '@/components/InlineNotice';
 import MenuButton from '@/components/MenuButton';
 import PersonPopup, { type Person } from '@/components/PersonPopup';
 import RideBox from '@/components/RideBox';
 import { useMyRides } from '@/hooks/useMyRides';
 import { useAuth } from '@/lib/auth';
+import { useNotify } from '@/lib/notify';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
@@ -19,8 +21,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNotify } from '@/lib/notify';
-import InlineNotice from '@/components/InlineNotice';
 
 
 
@@ -76,7 +76,7 @@ export default function RidesScreen() {
         contentContainerStyle={{ paddingTop: insets.top + 80, paddingBottom: 40, paddingHorizontal: 20 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text style={styles.title}>Rides</Text>
+        
 
         {loading ? (
           <ActivityIndicator color={colors.brand} style={styles.loading} />
@@ -86,7 +86,7 @@ export default function RidesScreen() {
 
             {isDriver && (
               <>
-                <Text style={styles.section}>Posted rides</Text>
+                <Text style={styles.title}>Posted rides</Text>
                 {posted.length === 0 ? (
                   <Text style={styles.empty}>You have no posted rides.</Text>
                 ) : (
@@ -120,7 +120,7 @@ export default function RidesScreen() {
               </>
             )}
 
-            <Text style={styles.section}>Booked rides</Text>
+            <Text style={styles.title}>Booked rides</Text>
             {booked.length === 0 ? (
               <Text style={styles.empty}>You have no booked rides.</Text>
             ) : (
