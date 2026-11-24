@@ -77,22 +77,19 @@ export default function RoutePreview(p: Props) {
             <Text style={styles.edit}>Edit</Text>
           </View>
         </PressButton>
-        {p.onMaxDivergence && (
-          <>
-            <View style={styles.sep} />
-            <PressButton ghost style={styles.stat} onPress={p.onMaxDivergence}>
-              <Text style={styles.value}>{p.maxDivergenceKm} km</Text>
-              <View style={styles.labelRow}>
-                <Text style={styles.labelEdit} numberOfLines={1}>
-                  {p.pricePerKm == null ? 'Set price/km' : `${p.pricePerKm.toFixed(2)}/km`}
-                </Text>
-                <Text style={styles.dot}>·</Text>
-                <Text style={styles.edit}>Edit</Text>
-              </View>
-            </PressButton>
-          </>
-        )}
       </View>
+
+      {p.onMaxDivergence && (
+        <PressButton ghost style={styles.driverOptions} onPress={p.onMaxDivergence}>
+          <View style={styles.driverDetails}>
+            <Text style={styles.labelEdit}>{p.maxDivergenceKm} km max divergence</Text>
+            <Text style={styles.label}>
+              {p.pricePerKm == null ? 'Set price per km' : `${p.pricePerKm.toFixed(2)} per km`}
+            </Text>
+          </View>
+          <Text style={styles.edit}>Edit</Text>
+        </PressButton>
+      )}
 
       {!!p.message && <InlineNotice message={p.message} style={styles.message} />}
 
@@ -135,19 +132,29 @@ const makeStyles = (c: Colors) =>
       borderRadius: 18,
       paddingVertical: 10,
       marginTop: 12,
-      // Only as wide as its contents, centred.
-      alignSelf: 'center',
-      maxWidth: '100%',
     },
-    stat: { alignItems: 'center', gap: 2, paddingHorizontal: 11, paddingVertical: 4, borderRadius: 14 },
+    stat: { flex: 1, minWidth: 0, alignItems: 'center', gap: 2, paddingHorizontal: 8, paddingVertical: 4 },
+    driverOptions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      marginTop: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+    },
+    driverDetails: { flex: 1, minWidth: 0, gap: 3 },
     sep: { width: 1, height: 28, backgroundColor: c.border },
-    value: { fontFamily: fonts.titleSemibold, fontSize: 17, color: c.text },
+    value: { fontFamily: fonts.titleSemibold, fontSize: 17, color: c.text, textAlign: 'center' },
     label: { fontFamily: fonts.regular, fontSize: 12, color: c.textSecondary },
     labelEdit: { fontFamily: fonts.regular, fontSize: 12, color: c.text },
-    // The Date / Time / Max divergence labels are black; "Edit" is blue.
     dot: { fontFamily: fonts.regular, fontSize: 12, color: c.text },
     edit: { fontFamily: fonts.semibold, fontSize: 12, color: c.brand },
-    labelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    labelRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 4 },
     message: { marginTop: 10 },
     submit: {
       height: 54,

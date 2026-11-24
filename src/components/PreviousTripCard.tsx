@@ -43,7 +43,10 @@ export default function PreviousTripCard({
   return (
     <View style={styles.card}>
       <View style={styles.top}>
-        <Text style={styles.when}>{whenText(trip.departAt)}</Text>
+        <View>
+          <Text style={styles.when}>{whenText(trip.departAt)}</Text>
+          {trip.statusLabel && <Text style={styles.status}>{trip.statusLabel}</Text>}
+        </View>
         <Text style={styles.price}>
           {trip.price == null ? '—' : `${trip.estimated ? '~' : ''}$${trip.price.toFixed(2)}`}
         </Text>
@@ -55,12 +58,12 @@ export default function PreviousTripCard({
 
       <View style={styles.person}>
         <View style={[styles.avatar, { backgroundColor: avatar.bg }]}>
-          <Text style={[styles.avatarText, { color: avatar.fg }]}>{initialsOf(trip.otherName)}</Text>
+          <Text style={[styles.avatarText, { color: avatar.fg }]}>{initialsOf(trip.otherName ?? '')}</Text>
         </View>
         <View style={styles.personText}>
           <Text style={styles.personRole}>{otherRole}</Text>
           <Text style={styles.personName} numberOfLines={1}>
-            {trip.otherName}
+            {trip.otherName ?? 'No passenger'}
           </Text>
         </View>
         <PressButton style={styles.redo} onPress={onRedo}>
@@ -83,6 +86,7 @@ const makeStyles = (c: Colors) =>
     },
     top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     when: { fontFamily: fonts.regular, fontSize: 14, color: c.textSecondary },
+    status: { fontFamily: fonts.semibold, fontSize: 12, color: c.textSecondary, marginTop: 4 },
     price: { fontFamily: fonts.titleSemibold, fontSize: 22, color: c.text },
     // Start and end in a light grey cell, like the route preview.
     stops: {

@@ -364,8 +364,8 @@ export default function HomeScreen() {
   // The best match is shown over the preview; "See others" opens the full list.
   const showMatch = hasResults && !listOpen;
   const best = passenger.results[0];
-  const previewNow = preview && preview.driver === driverMode && !driver.trip && !showResults ? preview : null;
-  const showTrip = !!driver.trip;
+  const previewNow = preview && preview.driver === driverMode && !showResults ? preview : null;
+  const showTrip = !!driver.trip && !previewNow;
   const showPreview = !!previewNow;
 
   // A posted trip, a route preview or a set of results always shows the plan view.
@@ -447,8 +447,8 @@ export default function HomeScreen() {
   }
 
   // What the map draws: the posted trip, or the driver being looked at.
-  const route = driver.trip?.route ?? previewNow?.route ?? [];
-  const markers: MapMarker[] = driver.trip
+  const route = previewNow?.route ?? driver.trip?.route ?? [];
+  const markers: MapMarker[] = showTrip
     ? driver.markers.map((m) => ({ ...m, color: colors.pickup }))
     : previewNow
     ? [

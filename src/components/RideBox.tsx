@@ -16,7 +16,7 @@ type Props = {
   viewLabel: string;
   viewDisabled?: boolean;
   onView: () => void;
-  onCancel: () => void;
+  onCancel?: () => void;
 };
 
 // One ride: where it starts and ends, plus a view button and a cancel button.
@@ -68,9 +68,11 @@ export default function RideBox({
         >
           <Text style={[styles.buttonText, viewDisabled && styles.disabledText]}>{viewLabel}</Text>
         </PressButton>
-        <PressButton ghost style={[styles.button, styles.cancel, styles.flex]} onPress={onCancel}>
-          <Text style={[styles.buttonText, styles.cancelText]}>Cancel ride</Text>
-        </PressButton>
+        {onCancel && (
+          <PressButton ghost style={[styles.button, styles.cancel, styles.flex]} onPress={onCancel}>
+            <Text style={[styles.buttonText, styles.cancelText]}>Cancel ride</Text>
+          </PressButton>
+        )}
       </View>
     </View>
   );

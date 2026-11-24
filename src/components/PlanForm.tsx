@@ -115,10 +115,7 @@ export default function PlanForm(p: Props) {
           <Icon name='calendar' size={20} color={colors.text} />
           <Text style={styles.pillText}>{formatWhen(p.when ?? new Date())}</Text>
         </PressButton>
-      </View>
-
-      {p.driverOptions && (
-        <View style={styles.pillRow}>
+        {p.driverOptions && (
           <PressButton ghost style={styles.pill} onPress={p.driverOptions.onEdit}>
             <Text style={styles.pillText}>
               {p.driverOptions.mdd} km divergence · {
@@ -128,8 +125,8 @@ export default function PlanForm(p: Props) {
               }
             </Text>
           </PressButton>
-        </View>
-      )}
+        )}
+      </View>
 
       <View style={styles.fields}>
         <View style={styles.connector}>
@@ -245,11 +242,13 @@ const makeStyles = (c: Colors) =>
       alignItems: 'center',
       gap: 8,
       paddingHorizontal: 16,
-      height: 40,
+      minHeight: 40,
+      maxWidth: '100%',
+      paddingVertical: 8,
       borderRadius: 20,
       backgroundColor: c.borderStrong,
     },
-    pillText: { fontFamily: fonts.medium, fontSize: 15, color: c.text },
+    pillText: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 15, color: c.text },
     fields: { flexDirection: 'row', gap: 12, marginTop: 12 },
     connector: { width: 24, alignItems: 'center', paddingTop: 25, paddingBottom: 22 },
     dot: { width: 18, height: 18, borderRadius: 9 },

@@ -2,6 +2,13 @@ import { classifyTrip, dayRange, localDate, type Pt } from './geo';
 import { getRoute } from './routing';
 import { supabase } from './supabase';
 
+export type RideStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+const activeRideStatuses: RideStatus[] = ['scheduled', 'in_progress'];
+
+export function isActiveRide(status: RideStatus) {
+  return activeRideStatuses.includes(status);
+}
+
 // A trip a driver has posted, with the road route drawn for it.
 export type Trip = {
   rideId: string;
@@ -109,11 +116,11 @@ export async function postTrip(args: {
 export async function isTripActive(rideId: string): Promise<boolean> {
   const { data, error } = await supabase
     .from('rides')
-    .select('isCompleted')
+    .select('status')
     .eq('rideId', rideId)
     .maybeSingle();
   if (error) throw error;
-  return !!data && !data.isCompleted;
+  return !!data && isActiveRide(data.status);
 }
 
 // Driver: their earliest unfinished trip, so it can be shown again after a restart.
@@ -122,7 +129,7 @@ export async function loadActiveTrip(driverId: string): Promise<Trip | null> {
     .from('rides')
     .select('rideId, route, tripMdd, departAt')
     .eq('driverId', driverId)
-    .or('isCompleted.is.null,isCompleted.eq.false')
+    .in('status', activeRideStatuses)
     .order('departAt', { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -268,7 +275,6 @@ export async function searchRides(
     .gte('departAt', a)
     .lte('departAt', b)
     .eq('status', 'scheduled')
-    .eq('isCompleted', false)
     .eq('occupied', false);
   if (error) throw error;
 
@@ -368,12 +374,13 @@ export async function sendRequest(requestId: string, r: Result) {
 
 // ---- Rides tab ----
 
-// A trip the driver posted and has not finished.
+// A trip the driver posted.
 export type PostedRide = {
   rideId: string;
   start: string;
   end: string;
   departAt: string | null;
+  status: RideStatus;
   // The accepted passenger, if any.
   passenger: { name: string } | null;
 };
@@ -386,16 +393,17 @@ export type BookedRide = {
   end: string;
   departAt: string | null;
   status: string;
+  rideStatus: RideStatus;
   driver: { name: string; rating: number | null };
 };
 
-export async function loadPostedRides(driverId: string): Promise<PostedRide[]> {
-  const { data, error } = await supabase
+export async function loadPostedRides(driverId: string, includeHistory = false): Promise<PostedRide[]> {
+  const query = supabase
     .from('rides')
-    .select('rideId, driverStartLocation, driverEndLocation, departAt')
+    .select('rideId, driverStartLocation, driverEndLocation, departAt, status')
     .eq('driverId', driverId)
-    .or('isCompleted.is.null,isCompleted.eq.false')
     .order('departAt', { ascending: true });
+  const { data, error } = await (includeHistory ? query : query.in('status', activeRideStatuses));
   if (error) throw error;
   const rides = data ?? [];
   if (rides.length === 0) return [];
@@ -420,6 +428,7 @@ export async function loadPostedRides(driverId: string): Promise<PostedRide[]> {
       start: r.driverStartLocation,
       end: r.driverEndLocation,
       departAt: r.departAt,
+      status: r.status,
       passenger: a ? { name: name || 'Passenger' } : null,
     };
   });
@@ -430,11 +439,11 @@ export async function loadBookedRides(passengerId: string): Promise<BookedRide[]
     .from('ride_requests')
     .select(
       `id, status, selectedRideId,
-       rides ( rideId, driverStartLocation, driverEndLocation, departAt, isCompleted,
+       rides ( rideId, driverStartLocation, driverEndLocation, departAt, status,
                drivers ( driverRating, users ( firstName, lastName ) ) )`,
     )
     .eq('passengerId', passengerId)
-    .in('status', ['pending', 'accepted']);
+    .in('status', ['pending', 'accepted', 'declined', 'cancelled']);
   if (error) throw error;
 
   type Row = {
@@ -445,7 +454,7 @@ export async function loadBookedRides(passengerId: string): Promise<BookedRide[]
       driverStartLocation: string;
       driverEndLocation: string;
       departAt: string | null;
-      isCompleted: boolean | null;
+      status: RideStatus;
       drivers: {
         driverRating: number | null;
         users: { firstName: string | null; lastName: string | null } | null;
@@ -455,8 +464,7 @@ export async function loadBookedRides(passengerId: string): Promise<BookedRide[]
 
   const list: BookedRide[] = [];
   for (const r of (data ?? []) as unknown as Row[]) {
-    // A finished ride moves to the Previous Trips tab.
-    if (!r.rides || r.rides.isCompleted) continue;
+    if (!r.rides) continue;
     const u = r.rides.drivers?.users;
     const name = u ? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() : '';
     list.push({
@@ -466,6 +474,7 @@ export async function loadBookedRides(passengerId: string): Promise<BookedRide[]
       end: r.rides.driverEndLocation,
       departAt: r.rides.departAt,
       status: r.status,
+      rideStatus: r.rides.status,
       driver: { name: name || 'Driver', rating: r.rides.drivers?.driverRating ?? null },
     });
   }

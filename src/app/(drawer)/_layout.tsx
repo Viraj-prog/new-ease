@@ -36,8 +36,7 @@ function DrawerContent(props: DrawerContentComponentProps) {
   const items: Item[] = [
     { route: 'index', label: 'Home', icon: (c) => <Icon name='home' color={c} /> },
     { route: 'wallet', label: 'Wallet', icon: (c) => <Icon name='billing-card' color={c} /> },
-    { route: 'rides', label: 'Trips', icon: (c) => <Icon name='trips-route' color={c} /> },
-    { route: 'previous-trips', label: 'Previous Trips', icon: (c) => <Icon name='clock' color={c} /> },
+    { route: 'rides', label: driverMode ? 'Scheduled Rides' : 'Trips', icon: (c) => <Icon name='trips-route' color={c} /> },
     { route: 'saved-trips', label: 'Saved Trips', icon: (c) => <Icon name='saved-bookmark' color={c} /> },
     { route: 'profile', label: 'Profile', icon: (c) => <Icon name='profile' color={c} /> },
   ];

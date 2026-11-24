@@ -1,14 +1,19 @@
 import MenuButton from '@/components/MenuButton';
 import PersonPopup, { type Person } from '@/components/PersonPopup';
+import PreviousTripCard from '@/components/PreviousTripCard';
 import RideBox from '@/components/RideBox';
+import SegmentedToggle, { type ToggleOption } from '@/components/SegmentedToggle';
 import { useMyRides } from '@/hooks/useMyRides';
 import { useAuth } from '@/lib/auth';
+import { avatarSlot } from '@/lib/driverExtras';
+import type { PreviousTrip } from '@/lib/previousTrips';
+import { isActiveRide, type BookedRide, type RideStatus } from '@/lib/rides';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
-import { useNavigation } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { type DrawerNavigationProp } from 'expo-router/drawer';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -22,7 +27,31 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotify } from '@/lib/notify';
 import InlineNotice from '@/components/InlineNotice';
 
+type RideTab = 'pending' | 'previous' | 'history';
+const tabs: ToggleOption<RideTab>[] = [
+  { key: 'pending', label: 'Pending', icon: 'calendar' },
+  { key: 'previous', label: 'Previous Trips', icon: 'check-circle' },
+  { key: 'history', label: 'History', icon: 'clock' },
+];
+const statusLabels: Record<RideStatus, string> = {
+  scheduled: 'Scheduled',
+  in_progress: 'In progress',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
 
+function isCurrentBooking(ride: BookedRide) {
+  return isActiveRide(ride.rideStatus) && (ride.status === 'accepted' || ride.status === 'pending');
+}
+
+function bookingLabel(ride: BookedRide) {
+  if (ride.rideStatus === 'cancelled') return 'Cancelled by driver';
+  if (ride.status === 'cancelled') return 'Cancelled';
+  if (ride.status === 'declined') return 'Declined';
+  if (ride.rideStatus === 'completed') return 'Completed';
+  if (ride.rideStatus === 'in_progress' && ride.status === 'accepted') return 'In progress';
+  return ride.status === 'accepted' ? 'Accepted' : 'Waiting for driver';
+}
 
 function whenText(iso: string | null) {
   if (!iso) return null;
@@ -41,11 +70,11 @@ export default function RidesScreen() {
   const navigation = useNavigation<DrawerNavigationProp<Record<string, undefined>>>();
   const insets = useSafeAreaInsets();
   const notify = useNotify();
-  const { session, isDriver } = useAuth();
-  const { posted, booked, loading, error, reload, cancelPosted, cancelBooked } = useMyRides(
-    session?.user.id,
-    isDriver,
-  );
+  const { session, driverMode } = useAuth();
+  const { posted, booked, trips, history, loading, error, reload, cancelPosted, cancelBooked } =
+    useMyRides(session?.user.id);
+  const [tab, setTab] = useState<RideTab>('pending');
+  const redoCount = useRef(0);
   const [person, setPerson] = useState<Person | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -70,13 +99,56 @@ export default function RidesScreen() {
     ]);
   }
 
+  const currentBookings = booked.filter(isCurrentBooking);
+  const cards = tab === 'previous' ? trips : history;
+
+  function redo(trip: PreviousTrip) {
+    router.navigate({
+      pathname: '/',
+      params: {
+        redo: `scheduled-${++redoCount.current}`,
+        from: /^current location$/i.test(trip.start.trim()) ? '' : trip.start,
+        to: trip.end,
+        role: trip.role,
+      },
+    });
+  }
+
+  function renderBooking(ride: BookedRide) {
+    return (
+      <RideBox
+        key={ride.requestId}
+        start={ride.start}
+        end={ride.end}
+        when={whenText(ride.departAt)}
+        badge={bookingLabel(ride)}
+        badgeGreen={ride.status === 'accepted' && ride.rideStatus !== 'cancelled'}
+        viewLabel='View driver'
+        onView={() => setPerson({
+          role: 'Driver',
+          name: ride.driver.name,
+          lines: [ride.driver.rating ? `Rating: ${ride.driver.rating} / 5` : 'No rating yet'],
+        })}
+        onCancel={isCurrentBooking(ride) ? () =>
+          confirmCancel(
+            'Cancel this ride?',
+            ride.status === 'accepted'
+              ? 'Your driver will no longer have you booked.'
+              : 'Your request will be withdrawn.',
+            () => cancelBooked(ride.requestId),
+          ) : undefined}
+      />
+    );
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + 80, paddingBottom: 40, paddingHorizontal: 20 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text style={styles.title}>Rides</Text>
+        <Text style={styles.title}>{driverMode ? 'Scheduled Rides' : 'Trips'}</Text>
+        <SegmentedToggle textOnly style={styles.tabs} options={tabs} value={tab} onChange={setTab} />
 
         {loading ? (
           <ActivityIndicator color={colors.brand} style={styles.loading} />
@@ -84,11 +156,26 @@ export default function RidesScreen() {
           <>
             {!!error && <InlineNotice message={error} style={styles.error} />}
 
-            {isDriver && (
-              <>
-                <Text style={styles.section}>Posted rides</Text>
-                {posted.length === 0 ? (
-                  <Text style={styles.empty}>You have no posted rides.</Text>
+            {tab !== 'pending' ? (
+              cards.length > 0 ? (
+                <View style={styles.list}>
+                  {cards.map((trip, index) => (
+                    <PreviousTripCard
+                      key={trip.key}
+                      trip={trip}
+                      avatarIndex={avatarSlot(index)}
+                      onRedo={() => redo(trip)}
+                    />
+                  ))}
+                </View>
+              ) : !error && (
+                <Text style={styles.empty}>
+                  {tab === 'previous' ? 'Rides you have finished will show up here.' : 'You have no ride history.'}
+                </Text>
+              )
+            ) : driverMode ? (
+                posted.length === 0 ? (
+                  <Text style={styles.empty}>You have no pending rides.</Text>
                 ) : (
                   <View style={styles.list}>
                     {posted.map((r) => (
@@ -97,64 +184,33 @@ export default function RidesScreen() {
                         start={r.start}
                         end={r.end}
                         when={whenText(r.departAt)}
-                        badge={r.passenger ? 'Passenger booked' : 'No passenger yet'}
-                        badgeGreen={!!r.passenger}
+                        badge={statusLabels[r.status]}
+                        badgeGreen={r.status === 'completed' || r.status === 'in_progress'}
                         viewLabel={r.passenger ? 'View passenger' : 'No passenger yet'}
                         viewDisabled={!r.passenger}
                         onView={() =>
                           r.passenger && setPerson({ role: 'Passenger', name: r.passenger.name })
                         }
-                        onCancel={() =>
+                        onCancel={isActiveRide(r.status) ? () =>
                           confirmCancel(
                             'Cancel this ride?',
                             r.passenger
                               ? 'The booked passenger will lose this ride.'
-                              : 'This trip will be removed.',
+                              : 'This trip will move to History.',
                             () => cancelPosted(r.rideId),
                           )
-                        }
+                        : undefined}
                       />
                     ))}
                   </View>
-                )}
-              </>
-            )}
-
-            <Text style={styles.section}>Booked rides</Text>
-            {booked.length === 0 ? (
-              <Text style={styles.empty}>You have no booked rides.</Text>
+                )
             ) : (
-              <View style={styles.list}>
-                {booked.map((r) => (
-                  <RideBox
-                    key={r.requestId}
-                    start={r.start}
-                    end={r.end}
-                    when={whenText(r.departAt)}
-                    badge={r.status === 'accepted' ? 'Accepted' : 'Waiting for driver'}
-                    badgeGreen={r.status === 'accepted'}
-                    viewLabel='View driver'
-                    onView={() =>
-                      setPerson({
-                        role: 'Driver',
-                        name: r.driver.name,
-                        lines: [
-                          r.driver.rating ? `Rating: ${r.driver.rating} / 5` : 'No rating yet',
-                        ],
-                      })
-                    }
-                    onCancel={() =>
-                      confirmCancel(
-                        'Cancel this ride?',
-                        r.status === 'accepted'
-                          ? 'Your driver will no longer have you booked.'
-                          : 'Your request will be withdrawn.',
-                        () => cancelBooked(r.requestId),
-                      )
-                    }
-                  />
-                ))}
-              </View>
+              <>
+                <Text style={styles.section}>Booked rides</Text>
+                {currentBookings.length > 0
+                  ? <View style={styles.list}>{currentBookings.map(renderBooking)}</View>
+                  : <Text style={styles.empty}>You have no booked rides.</Text>}
+              </>
             )}
           </>
         )}
@@ -174,6 +230,7 @@ const makeStyles = (c: Colors) =>
     error: { marginTop: 10 },
     loading: { marginTop: 40 },
     title: { fontFamily: fonts.titleSemibold, fontSize: 32, color: c.text },
+    tabs: { marginVertical: 16 },
     section: { fontFamily: fonts.semibold, fontSize: 18, color: c.text, marginTop: 24, marginBottom: 10 },
     empty: { fontFamily: fonts.regular, fontSize: 14, color: c.textSecondary },
   });

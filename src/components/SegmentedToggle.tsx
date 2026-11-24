@@ -23,6 +23,7 @@ type Props<T extends string> = {
   disabled?: boolean;
   // Icon-only round segments. Otherwise the segments share the width and show their labels.
   compact?: boolean;
+  textOnly?: boolean;
   // Compact only: width and height of each round segment (default 32).
   segment?: number;
   style?: StyleProp<ViewStyle>;
@@ -38,6 +39,7 @@ export default function SegmentedToggle<T extends string>({
   onChange,
   disabled,
   compact,
+  textOnly,
   segment = 32,
   style,
 }: Props<T>) {
@@ -79,13 +81,15 @@ export default function SegmentedToggle<T extends string>({
         return (
           <Pressable
             key={o.key}
-            style={compact ? [styles.segmentCompact, { width: segment, height: segment }] : styles.segmentWide}
+            style={compact
+              ? [styles.segmentCompact, { width: segment, height: segment }]
+              : [styles.segmentWide, textOnly && styles.segmentTextOnly]}
             onPress={() => onChange(o.key)}
             disabled={disabled}
             hitSlop={compact ? (segment > 32 ? 8 : 4) : undefined}
           >
-            <Icon name={o.icon} size={compact ? Math.round(segment * 0.56) : 20} color={color} />
-            {!!o.label && <Text style={[styles.label, { color }]}>{o.label}</Text>}
+            {!textOnly && <Icon name={o.icon} size={compact ? Math.round(segment * 0.56) : 20} color={color} />}
+            {!!o.label && <Text style={[styles.label, textOnly && styles.centeredLabel, { color }]}>{o.label}</Text>}
           </Pressable>
         );
       })}
@@ -127,4 +131,6 @@ const makeStyles = (c: Colors) =>
       paddingVertical: 10,
     },
     label: { fontFamily: fonts.semibold, fontSize: 15 },
+    segmentTextOnly: { minWidth: 0, paddingHorizontal: 4 },
+    centeredLabel: { flexShrink: 1, fontSize: 14, textAlign: 'center' },
   });

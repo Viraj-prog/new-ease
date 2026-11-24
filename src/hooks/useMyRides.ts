@@ -1,4 +1,5 @@
 import { errText } from '@/lib/places';
+import { loadPreviousTrips, loadRideHistory, type PreviousTrip } from '@/lib/previousTrips';
 import {
   cancelBooking,
   cancelPostedRide,
@@ -11,21 +12,27 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 // The Rides tab: trips the user posted as a driver, and rides they booked as a passenger.
-export function useMyRides(userId: string | undefined, isDriver: boolean) {
+export function useMyRides(userId: string | undefined) {
   const [posted, setPosted] = useState<PostedRide[]>([]);
   const [booked, setBooked] = useState<BookedRide[]>([]);
+  const [trips, setTrips] = useState<PreviousTrip[]>([]);
+  const [history, setHistory] = useState<PreviousTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const reload = useCallback(async () => {
     if (!userId) return;
     try {
-      const [p, b] = await Promise.all([
-        isDriver ? loadPostedRides(userId) : Promise.resolve([]),
+      const [p, b, previousCards, historyCards] = await Promise.all([
+        loadPostedRides(userId),
         loadBookedRides(userId),
+        loadPreviousTrips(userId),
+        loadRideHistory(userId),
       ]);
       setPosted(p);
       setBooked(b);
+      setTrips(previousCards);
+      setHistory(historyCards);
       setError('');
     } catch (e) {
       console.error(e);
@@ -33,7 +40,7 @@ export function useMyRides(userId: string | undefined, isDriver: boolean) {
     } finally {
       setLoading(false);
     }
-  }, [userId, isDriver]);
+  }, [userId]);
 
   // Reload every time the tab is opened.
   useFocusEffect(
@@ -65,5 +72,5 @@ export function useMyRides(userId: string | undefined, isDriver: boolean) {
     }
   }
 
-  return { posted, booked, loading, error, reload, cancelPosted, cancelBooked };
+  return { posted, booked, trips, history, loading, error, reload, cancelPosted, cancelBooked };
 }
