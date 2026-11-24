@@ -41,9 +41,6 @@ export default function DriverList({ drivers, chosenId, onChoose, priceText, onB
 
   return (
     <View style={styles.screen}>
-      <BackButton onPress={onBack} />
-      <MapTitleChip title='Available drivers' />
-
       <ScrollView
         contentContainerStyle={{
           paddingTop: insets.top + 8 + 46 + 18,
@@ -90,6 +87,11 @@ export default function DriverList({ drivers, chosenId, onChoose, priceText, onB
           })}
         </View>
       </ScrollView>
+
+      {/* Drawn after the list so they sit on top of it. Before the list, the list covered the
+          Back button and swallowed its taps. */}
+      <BackButton onPress={onBack} />
+      <MapTitleChip title='Available drivers' />
 
       {chosenId && (
         <View style={[styles.confirmWrap, { paddingBottom: insets.bottom + 16 }]}>

@@ -7,10 +7,12 @@ import {
   isTripActive,
   loadActiveTrip,
   loadRequests,
+  loadTrip,
   postTrip,
   type Req,
   type Trip,
 } from '@/lib/rides';
+import { onTripsChanged } from '@/lib/tripEvents';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -92,7 +94,7 @@ export function useDriverFlow(userId: string | undefined, active = true) {
   }, [trip]);
 
   // Match the screen to the database: drop a trip that was finished or cancelled elsewhere
-  // (for example from the Rides tab), or bring back an unfinished one after a restart.
+  // (for example from the Trips tab), or bring back one that is in progress after a restart.
   async function sync() {
     if (!userId) return;
     try {
@@ -104,7 +106,7 @@ export function useDriverFlow(userId: string | undefined, active = true) {
       const t = await loadActiveTrip(userId);
       if (t) {
         setTrip((current) => current ?? t);
-        setMsg((m) => m || 'You have an unfinished trip. Finish it to post another.');
+        setMsg((m) => m || 'You have a trip in progress.');
       }
     } catch (e) {
       console.error(e);
@@ -117,6 +119,29 @@ export function useDriverFlow(userId: string | undefined, active = true) {
       if (active) sync();
     }, [active, userId]),
   );
+
+  // A trip was cancelled from a popup while Home may be on screen.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => onTripsChanged(() => sync()), [userId]);
+
+  // Show one of the driver's trips (picked in the Trips tab). Returns null on success, or the
+  // reason it could not be shown.
+  async function open(rideId: string): Promise<string | null> {
+    try {
+      const t = await loadTrip(rideId);
+      if (!t) return 'This trip has been finished or cancelled.';
+      clear();
+      setTrip(t);
+      return null;
+    } catch (e) {
+      console.error(e);
+      return errText(e);
+    }
+  }
+
+  function markStarted() {
+    setTrip((t) => (t && !t.started ? { ...t, started: true } : t));
+  }
 
   // Mark the shown trip finished and clear it from the screen. Returns null on success, or the
   // reason it failed. (It sets no message, so the caller can go straight back Home.)
@@ -190,6 +215,6 @@ export function useDriverFlow(userId: string | undefined, active = true) {
 
   return {
     loading, msg, trip, requests, popup, markers,
-    post, respond, clear, closePopup, finish,
+    post, open, markStarted, respond, clear, closePopup, finish,
   };
 }

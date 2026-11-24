@@ -1,181 +1,130 @@
+import InlineNotice from '@/components/InlineNotice';
 import MenuButton from '@/components/MenuButton';
-import { ageFrom, useProfile } from '@/hooks/useProfile';
+import ThemeToggle from '@/components/ThemeToggle';
+import { useProfile } from '@/hooks/useProfile';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
 import { Image } from 'expo-image';
 import { useNavigation } from 'expo-router';
 import { type DrawerNavigationProp } from 'expo-router/drawer';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import InlineNotice from '@/components/InlineNotice';
 
-function Field({ label, value, done }: { label: string; value: string; done: boolean }) {
-    const { colors } = useTheme();
-    const styles = makeStyles(colors);
-
-    return (
-        <View style={styles.fieldRow}>
-            <Image
-                source={
-                    done
-                        ? require('../../../assets/images/check_small.png')
-                        : require('../../../assets/images/XcircleIcon.png')
-                }
-                style={styles.status}
-                contentFit='contain'
-            />
-            <Text style={styles.fieldLabel}>{label}</Text>
-            <Image
-                source={require('../../../assets/images/EditIcon.png')}
-                style={styles.pencil}
-                contentFit='contain'
-                tintColor={colors.textSecondary}
-            />
-            <Text style={styles.fieldValue}>{value}</Text>
-        </View>
-    );
-}
+const initialsOf = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase() || '?';
 
 export default function ProfileScreen() {
-    const { colors } = useTheme();
-    const styles = makeStyles(colors);
-    const navigation = useNavigation<DrawerNavigationProp<Record<string, undefined>>>();
-    const insets = useSafeAreaInsets();
-    const { profile, loading, error, email } = useProfile();
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+  const navigation = useNavigation<DrawerNavigationProp<Record<string, undefined>>>();
+  const insets = useSafeAreaInsets();
+  const { profile, loading, error, email } = useProfile();
 
-    const name = `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim();
-    const age = ageFrom(profile?.dateOfBirth ?? null);
-    // Passengers have no rating, so they see empty stars.
-    const filledStars = Math.max(0, Math.min(5, Math.round(profile?.rating ?? 0)));
+  const name = `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim();
+  // Passengers have no rating yet.
+  const rating = profile?.rating ? Number(profile.rating).toFixed(1) : '—';
+  const avatar = colors.avatars[4];
 
-    return (
-        <View style={styles.container}>
-            <ScrollView contentContainerStyle={{ paddingTop: insets.top + 72, paddingBottom: 40 }}>
-                <View style={styles.avatar}>
-                    <Image
-                        source={
-                            profile?.profilePicture
-                                ? { uri: profile.profilePicture }
-                                : require('../../../assets/images/account_circle.png')
-                        }
-                        style={styles.avatarImage}
-                        contentFit='cover'
-                    />
-                    <Pressable style={styles.avatarBadge}>
-                        <Image
-                            source={require('../../../assets/images/XcircleIcon.png')}
-                            style={styles.avatarBadgeIcon}
-                            contentFit='contain'
-                        />
-                    </Pressable>
-                </View>
+  return (
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 72, paddingBottom: 40, paddingHorizontal: 24 }}>
+        <View style={styles.card}>
+          {profile?.profilePicture ? (
+            <Image source={{ uri: profile.profilePicture }} style={styles.avatar} contentFit='cover' />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: avatar.bg }]}>
+              <Text style={[styles.initials, { color: avatar.fg }]}>{initialsOf(name)}</Text>
+            </View>
+          )}
 
-                <View style={styles.stars}>
-                    {[0, 1, 2, 3, 4].map((i) => (
-                        <Image
-                            key={i}
-                            source={
-                                i < filledStars
-                                    ? require('../../../assets/images/star_filled.png')
-                                    : require('../../../assets/images/star_unfilled.png')
-                            }
-                            style={styles.star}
-                            contentFit='contain'
-                        />
-                    ))}
-                </View>
+          {loading && !profile ? (
+            <ActivityIndicator color={colors.brand} style={styles.loading} />
+          ) : (
+            <Text style={styles.name} numberOfLines={1}>
+              {name || 'No name yet'}
+            </Text>
+          )}
 
-                {loading && !profile ? (
-                    <ActivityIndicator color={colors.brand} style={styles.loading} />
-                ) : (
-                    <>
-                        <Text style={styles.name}>{name || 'No name yet'}</Text>
-                        <View style={styles.verifyRow}>
-                            <View style={[styles.chip, profile?.isVerified && styles.chipVerified]}>
-                                <Text style={[styles.chipText, profile?.isVerified && styles.chipTextVerified]}>
-                                    {profile?.isVerified ? 'Verified' : 'Not Verified'}
-                                </Text>
-                            </View>
-                            {!profile?.isVerified && <Text style={styles.link}>Verify Account</Text>}
-                        </View>
-                        <Text style={styles.rides}>Total Rides: {profile?.totalRides ?? 0}</Text>
-                    </>
-                )}
+          {!!error && <InlineNotice message={error} style={styles.error} />}
 
-                {!!error && <InlineNotice message={error} style={styles.error} />}
+          <View style={styles.inset}>
+            <View style={styles.stat}>
+              <Text style={styles.label}>Total Rides</Text>
+              <Text style={styles.statValue}>{profile?.totalRides ?? 0}</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.stat}>
+              <Text style={styles.label}>Rating</Text>
+              <Text style={styles.statValue}>{rating}</Text>
+            </View>
+          </View>
 
-                <View style={styles.fields}>
-                    <Field label='Email Address' value={email ?? 'N/A'} done={!!email} />
-                    <Field label='Password' value='••••••••••••' done />
-                    <Field label='Age' value={age === null ? 'N/A' : String(age)} done={age !== null} />
-                    <Field label='Gender' value='N/A' done={false} />
-                </View>
-            </ScrollView>
+          <View style={[styles.inset, styles.emailBox]}>
+            <Text style={styles.label}>Email Address</Text>
+            <Text style={styles.email} numberOfLines={1}>
+              {email ?? 'N/A'}
+            </Text>
+          </View>
 
-            <MenuButton onPress={() => navigation.openDrawer()} />
+          <View style={styles.toggle}>
+            <ThemeToggle depth />
+          </View>
         </View>
-    );
+
+      </ScrollView>
+
+      <MenuButton onPress={() => navigation.openDrawer()} />
+    </View>
+  );
 }
 
 const makeStyles = (c: Colors) =>
-    StyleSheet.create({
-        container: { flex: 1, backgroundColor: c.background },
-        avatar: {
-            width: 220,
-            height: 220,
-            alignSelf: 'center',
-        },
-        avatarImage: { width: 220, height: 220, borderRadius: 110 },
-        avatarBadge: {
-            position: 'absolute',
-            right: 0,
-            bottom: 0,
-        },
-        avatarBadgeIcon: { width: 44, height: 44 },
-        stars: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 16 },
-        star: { width: 20, height: 20 },
-        loading: { marginTop: 20 },
-        name: {
-            fontFamily: fonts.titleSemibold,
-            textAlign: 'center',
-            fontSize: 36,
-            color: c.text,
-            marginTop: 8,
-        },
-        verifyRow: {
-            flexDirection: 'row',
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: 8,
-            marginTop: 8,
-        },
-        chip: {
-            backgroundColor: c.pill,
-            borderRadius: 4,
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-        },
-        chipVerified: { backgroundColor: c.successTint },
-        chipText: { fontFamily: fonts.semibold, color: c.textSecondary, fontSize: 13 },
-        chipTextVerified: { color: c.onSuccessTint },
-        link: {
-            fontFamily: fonts.medium,
-            textDecorationLine: 'underline',
-            color: c.brand,
-            fontSize: 13,
-        },
-        rides: { fontFamily: fonts.regular, textAlign: 'center', color: c.textSecondary, marginTop: 8 },
-        error: { marginTop: 8, marginHorizontal: 30 },
-        fields: { paddingHorizontal: 40, marginTop: 32, gap: 12 },
-        fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-        status: { width: 18, height: 18 },
-        fieldLabel: { fontFamily: fonts.medium, fontSize: 15, color: c.text },
-        pencil: { width: 16, height: 16 },
-        fieldValue: {
-            fontFamily: fonts.regular,
-            marginLeft: 'auto',
-            fontSize: 12,
-            color: c.textSecondary,
-        },
-    });
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    card: {
+      backgroundColor: c.card,
+      borderRadius: 32,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: 'center',
+      paddingHorizontal: 22,
+      paddingTop: 29,
+      paddingBottom: 22,
+    },
+    avatar: { width: 112, height: 112, borderRadius: 56, alignItems: 'center', justifyContent: 'center' },
+    initials: { fontFamily: fonts.titleSemibold, fontSize: 45 },
+    loading: { marginTop: 19 },
+    name: { fontFamily: fonts.titleSemibold, fontSize: 26, color: c.text, marginTop: 16, marginBottom: 22, textAlign: 'center' },
+    error: { marginBottom: 10 },
+    inset: {
+      alignSelf: 'stretch',
+      flexDirection: 'row',
+      backgroundColor: c.background,
+      borderRadius: 19,
+      borderWidth: 1,
+      borderColor: c.border,
+      paddingVertical: 13,
+      boxShadow: `0px 6px 14px ${c.shadow}`,
+    },
+    stat: { flex: 1, alignItems: 'center' },
+    statDivider: { width: 1, backgroundColor: c.border, marginVertical: 2 },
+    label: { fontFamily: fonts.semibold, fontSize: 13, color: c.textSecondary },
+    statValue: { fontFamily: fonts.titleSemibold, fontSize: 27, color: c.text },
+    emailBox: { flexDirection: 'column', alignItems: 'center', marginTop: 16, paddingVertical: 11 },
+    email: {
+      fontFamily: fonts.regular,
+      fontSize: 14,
+      color: c.text,
+      marginTop: 2,
+      textAlign: 'center',
+      paddingHorizontal: 10,
+    },
+    toggle: { marginTop: 16 },
+  });

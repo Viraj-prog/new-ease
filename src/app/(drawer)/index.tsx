@@ -13,10 +13,10 @@ import PlanForm from '@/components/PlanForm';
 import RideStatusPopup from '@/components/RideStatusPopup';
 import RoutePreview from '@/components/RoutePreview';
 import SearchPill from '@/components/SearchPill';
-import ThemeToggle from '@/components/ThemeToggle';
 import TripNavigation from '@/components/TripNavigation';
 import TripSheet, { tripTitle } from '@/components/TripSheet';
 import { useDriverFlow } from '@/hooks/useDriverFlow';
+import { cancellationsTracked } from '@/lib/cancellations';
 import { haversineKm, PRICE_PER_KM } from '@/lib/previousTrips';
 import { useSavedTrips } from '@/hooks/useSavedTrips';
 import { usePassengerFlow } from '@/hooks/usePassengerFlow';
@@ -25,7 +25,7 @@ import { useAuth } from '@/lib/auth';
 import type { Pt } from '@/lib/geo';
 import { pickDate, pickDateTime, pickTime } from '@/lib/pickDateTime';
 import { CURRENT_LABEL, errText, isCurrentLabel, resolveDestination, resolveStart } from '@/lib/places';
-import { cancelPostedRide, loadPostedRides } from '@/lib/rides';
+import { cancelPostedRide, loadPostedRides, startTrip } from '@/lib/rides';
 import { getRoute } from '@/lib/routing';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
@@ -149,9 +149,6 @@ export default function HomeScreen() {
   const pillStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: sheetPosition.get() - 25 }],
   }));
-  const toggleStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetPosition.get() - 84 }],
-  }));
   // A message from posting a trip or finding a driver floats just above the sheet's top edge.
   const noticeStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: sheetPosition.get() }],
@@ -171,27 +168,66 @@ export default function HomeScreen() {
 
   const tripId = driver.trip?.rideId;
 
-  // A freshly posted (or restored) trip gets the taller sheet.
+  // A freshly posted (or restored) trip gets the taller sheet; the sheet drops back when it goes.
   useEffect(() => {
-    if (tripId) sheetRef.current?.snapToIndex(SNAP.TRIP);
+    sheetRef.current?.snapToIndex(tripId ? SNAP.TRIP : SNAP.MID);
   }, [tripId]);
 
-  // Ask the database whether a passenger is booked on this trip.
+  // The passenger last seen booked on the shown trip, so a cancellation can be noticed.
+  const lastBooked = useRef<{ rideId: string; name: string | null } | null>(null);
+
+  // Ask the database whether a passenger is booked on this trip. If one who was booked is gone,
+  // they cancelled, and the driver is told.
   function refreshBooked() {
     if (!userId || !tripId) return;
     loadPostedRides(userId)
       .then((rows) => {
         const row = rows.find((r) => r.rideId === tripId);
-        setBooked(row?.passenger ? { rideId: tripId, name: row.passenger.name } : null);
+        const next = row?.passenger ? { rideId: tripId, name: row.passenger.name } : null;
+        const before = lastBooked.current;
+        lastBooked.current = next;
+        // Once supabase/trip_rules.sql is in place, the saved notices cover this.
+        if (!cancellationsTracked() && row && before && before.rideId === tripId && !next) {
+          const who = before.name ?? 'The passenger';
+          notify({
+            kind: 'alert',
+            title: 'Passenger cancelled',
+            subtitle: row.startedAt
+              ? `${who} cancelled after the trip started. You will still be paid.`
+              : `${who} cancelled their ride.`,
+          });
+        }
+        setBooked(next);
       })
       .catch((e) => console.error(e));
   }
 
   // Check when a trip appears (for example after an app restart with a passenger already booked).
   useEffect(() => {
+    lastBooked.current = null;
     refreshBooked();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId, userId]);
+
+  // While a trip is showing, check every 10 seconds whether a passenger booked or cancelled.
+  useEffect(() => {
+    if (!tripId) return;
+    const timer = setInterval(refreshBooked, 10000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripId, userId]);
+
+  // Start trip: record it, so riders stop finding this trip, then open navigation.
+  async function onStartTrip() {
+    if (!driver.trip) return;
+    try {
+      await startTrip(driver.trip.rideId);
+      driver.markStarted();
+      setNavigating(true);
+    } catch (e) {
+      notify({ kind: 'alert', title: 'Could not start the trip', subtitle: errText(e) });
+    }
+  }
 
   const bookedNow = booked && booked.rideId === tripId ? booked : null;
 
@@ -329,12 +365,43 @@ export default function HomeScreen() {
     }, [redoParams.redo]),
   );
 
+  // The Trips tab (or the overdue-trip popup) sends a posted trip here to be shown. It is read
+  // once, then cleared.
+  const openParams = useLocalSearchParams<{ open?: string; nav?: string }>();
+  async function openTrip(rideId: string, navigate: boolean) {
+    Keyboard.dismiss();
+    passenger.clear();
+    setPreview(null);
+    setChosenId(null);
+    setView('home');
+    if (!driverMode) await choose(true);
+    const problem = await driver.open(rideId);
+    if (problem) notify({ kind: 'alert', title: 'Could not open the trip', subtitle: problem });
+    else if (navigate) setNavigating(true);
+  }
+  useFocusEffect(
+    useCallback(() => {
+      if (!openParams.open) return;
+      const { open, nav } = openParams;
+      router.setParams({ open: undefined, nav: undefined });
+      openTrip(open, nav === '1');
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [openParams.open]),
+  );
+
   // Post the trip being previewed. The preview goes away once it is posted.
   async function onPost() {
     Keyboard.dismiss();
     passenger.clear();
     const ok = await driver.post(pickup, destination, when ?? new Date(), mdd, EXTRA_KM);
-    if (ok) setPreview(null);
+    if (!ok) return;
+    // The posted trip now holds its own details. Empty the form, so that when the trip goes away
+    // (finished, or cancelled from anywhere) Home is Home again and the next trip starts fresh.
+    setPreview(null);
+    setPickup('');
+    setDestination('');
+    setWhen(null);
+    setView('home');
   }
 
   const active = !!driver.trip || passenger.results.length > 0 || !!passenger.msg || !!driver.msg;
@@ -446,8 +513,17 @@ export default function HomeScreen() {
 
   // What the map draws: the posted trip, or the driver being looked at.
   const route = driver.trip?.route ?? previewNow?.route ?? [];
+  // The posted trip shows its own start and end like the preview does, then the purple dots of
+  // nearby passengers who are still searching.
+  const tripEnds: MapMarker[] =
+    driver.trip && driver.trip.route.length > 1
+      ? [
+          { id: 'start', point: driver.trip.route[0], color: colors.brand },
+          { id: 'end', point: driver.trip.route[driver.trip.route.length - 1], color: colors.alert },
+        ]
+      : [];
   const markers: MapMarker[] = driver.trip
-    ? driver.markers.map((m) => ({ ...m, color: colors.pickup }))
+    ? [...tripEnds, ...driver.markers.map((m) => ({ ...m, color: colors.pickup }))]
     : previewNow
     ? [
         { id: 'start', point: previewNow.start, color: colors.brand },
@@ -476,7 +552,7 @@ export default function HomeScreen() {
 
       {navigating ? (
         <TripNavigation
-          destination={destination}
+          destination={driver.trip?.endText ?? destination}
           distanceKm={driver.trip?.distanceKm ?? 0}
           durationMin={driver.trip?.durationMin ?? 0}
           onEnd={endTrip}
@@ -499,7 +575,10 @@ export default function HomeScreen() {
           {showPlan && !showTrip && !showPreview && (
             <View pointerEvents='none' style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }]} />
           )}
-          {showPreview ? (
+          {showTrip ? (
+            // Back leaves the trip posted and returns Home. It can be reopened from the Trips tab.
+            <BackButton onPress={closePlan} />
+          ) : showPreview ? (
             <BackButton
               onPress={() => {
                 setPreview(null);
@@ -508,7 +587,7 @@ export default function HomeScreen() {
               }}
             />
           ) : (
-            (!showPlan || showTrip) && <MenuButton onPress={() => navigation.openDrawer()} />
+            !showPlan && <MenuButton onPress={() => navigation.openDrawer()} />
           )}
           {showTrip && <MapTitleChip title={tripTitle(driver.popup, bookedNow)} />}
           {showPreview && <MapTitleChip title='Your route' />}
@@ -547,16 +626,17 @@ export default function HomeScreen() {
                 />
               ) : showTrip && driver.trip ? (
                 <TripSheet
-                  startText={pickup}
-                  endText={destination}
+                  startText={driver.trip.startText}
+                  endText={driver.trip.endText}
+                  started={driver.trip.started}
                   mddKm={driver.trip.mdd}
                   request={driver.popup}
                   booked={bookedNow}
                   message={message}
                   onAccept={() => answer(true)}
                   onDecline={() => answer(false)}
-                  onNotNow={driver.closePopup}
-                  onStart={() => setNavigating(true)}
+                  startsAt={driver.trip.when}
+                  onStart={onStartTrip}
                   onCancel={() => setConfirmCancel(true)}
                 />
               ) : previewNow ? (
@@ -577,7 +657,6 @@ export default function HomeScreen() {
               ) : (
                 <>
                   <PlanForm
-                    title={driverMode ? 'Plan your ride' : 'Book your ride'}
                     onBack={closePlan}
                     driverMode={driverMode}
                     switching={switching}
@@ -637,9 +716,6 @@ export default function HomeScreen() {
           {/* Drawn after the sheet so they sit on top of its edge. */}
           {!showPlan && (
             <>
-              <Animated.View style={[styles.toggle, toggleStyle]}>
-                <ThemeToggle />
-              </Animated.View>
               <Animated.View style={[styles.pill, pillStyle]}>
                 <SearchPill onPress={() => openPlan()} />
               </Animated.View>
@@ -673,7 +749,7 @@ export default function HomeScreen() {
         title='Are you sure?'
         message={
           bookedNow
-            ? 'Your booked passenger will lose this ride, and your trip will be cancelled and removed from rider search.'
+            ? 'Your booked passenger will lose this ride and be refunded in full. Your trip will be cancelled and removed from rider search.'
             : 'Your posted trip will be cancelled and removed from rider search.'
         }
         busy={cancelling}
@@ -711,7 +787,6 @@ const makeStyles = (c: Colors) =>
     },
     // Room for the pill that overlaps the top of the sheet.
     homeContent: { paddingTop: 21 },
-    toggle: { position: 'absolute', top: 0, right: 16 },
     pill: { position: 'absolute', top: 0, left: 16, right: 16 },
     message: { marginTop: 12 },
     // Zero-height row at the sheet's top edge; the card hangs upward from it.

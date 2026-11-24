@@ -25,6 +25,8 @@ type Props<T extends string> = {
   compact?: boolean;
   // Compact only: width and height of each round segment (default 32).
   segment?: number;
+  // Gives the track a recessed look and the thumb a raised, glowing one (used on the Profile page).
+  depth?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -39,9 +41,10 @@ export default function SegmentedToggle<T extends string>({
   disabled,
   compact,
   segment = 32,
+  depth,
   style,
 }: Props<T>) {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
   const styles = makeStyles(colors);
 
   const [width, setWidth] = useState(0);
@@ -69,10 +72,30 @@ export default function SegmentedToggle<T extends string>({
 
   return (
     <View
-      style={[styles.track, compact ? styles.trackCompact : styles.trackWide, style]}
+      style={[
+        styles.track,
+        compact ? styles.trackCompact : styles.trackWide,
+        depth && {
+          backgroundColor: mode === 'dark' ? colors.input : colors.surface,
+          boxShadow:
+            mode === 'dark'
+              ? 'inset 0px 3px 6px rgba(0,0,0,0.6), 0px 1px 0px rgba(255,255,255,0.04)'
+              : '0px 4px 10px rgba(16,23,27,0.14), inset 0px 1px 2px rgba(16,23,27,0.06)',
+        },
+        style,
+      ]}
       onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}
     >
-      <Animated.View style={[styles.thumb, { width: thumbWidth }, thumbStyle]} />
+      <Animated.View
+        style={[
+          styles.thumb,
+          { width: thumbWidth },
+          depth && {
+            boxShadow: `0px 4px 10px rgba(30,144,255,${mode === 'dark' ? 0.11 : 0.08}), inset 0px 1px 1px rgba(255,255,255,0.45)`,
+          },
+          thumbStyle,
+        ]}
+      />
       {options.map((o) => {
         const active = o.key === value;
         const color = active ? colors.toggleActiveText : colors.textSecondary;

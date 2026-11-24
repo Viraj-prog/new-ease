@@ -1,8 +1,10 @@
 import Icon from '@/components/Icon';
 import LogoutPopup from '@/components/LogoutPopup';
-import SegmentedToggle from '@/components/SegmentedToggle';
+import OverdueTripPrompt from '@/components/OverdueTripPrompt';
+import { useCancellationNotices } from '@/hooks/useCancellationNotices';
 import { useProfile } from '@/hooks/useProfile';
-import { useRoleSwitch } from '@/hooks/useRoleSwitch';
+import { useRequestNotices } from '@/hooks/useRequestNotices';
+import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
@@ -19,7 +21,6 @@ function DrawerContent(props: DrawerContentComponentProps) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
   const insets = useSafeAreaInsets();
-  const { driverMode, switching, choose } = useRoleSwitch();
   const notify = useNotify();
   const { profile } = useProfile();
   const [confirmVisible, setConfirmVisible] = useState(false);
@@ -35,8 +36,7 @@ function DrawerContent(props: DrawerContentComponentProps) {
 
   const items: Item[] = [
     { route: 'index', label: 'Home', icon: (c) => <Icon name='home' color={c} /> },
-    { route: 'wallet', label: 'Wallet', icon: (c) => <Icon name='billing-card' color={c} /> },
-    { route: 'rides', label: 'Trips', icon: (c) => <Icon name='trips-route' color={c} /> },
+    { route: 'rides', label: 'Scheduled Trips', icon: (c) => <Icon name='calendar' color={c} /> },
     { route: 'previous-trips', label: 'Previous Trips', icon: (c) => <Icon name='clock' color={c} /> },
     { route: 'saved-trips', label: 'Saved Trips', icon: (c) => <Icon name='saved-bookmark' color={c} /> },
     { route: 'profile', label: 'Profile', icon: (c) => <Icon name='profile' color={c} /> },
@@ -68,17 +68,6 @@ function DrawerContent(props: DrawerContentComponentProps) {
           </View>
         </View>
       </View>
-
-      <SegmentedToggle
-        style={styles.toggle}
-        options={[
-          { key: 'driver', icon: 'steering-wheel', label: 'Driver' },
-          { key: 'rider', icon: 'rider', label: 'Rider' },
-        ]}
-        value={driverMode ? 'driver' : 'rider'}
-        onChange={(k) => choose(k === 'driver')}
-        disabled={switching}
-      />
 
       <View style={styles.items}>
         {items.map((item) => {
@@ -119,18 +108,24 @@ function DrawerContent(props: DrawerContentComponentProps) {
 
 export default function DrawerLayout() {
   const { colors } = useTheme();
+  const { session } = useAuth();
+  useCancellationNotices(session?.user.id);
+  useRequestNotices(session?.user.id);
 
   return (
-    <Drawer
-      drawerContent={(props) => <DrawerContent {...props} />}
-      screenOptions={{
-        headerShown: false,
-        drawerType: 'front',
-        overlayColor: colors.scrim,
-        // The rounded panel is drawn by DrawerContent, so the container itself is see-through.
-        drawerStyle: { backgroundColor: 'transparent', width: 300 },
-      }}
-    />
+    <>
+      <Drawer
+        drawerContent={(props) => <DrawerContent {...props} />}
+        screenOptions={{
+          headerShown: false,
+          drawerType: 'front',
+          overlayColor: colors.scrim,
+          // The rounded panel is drawn by DrawerContent, so the container itself is see-through.
+          drawerStyle: { backgroundColor: 'transparent', width: 300 },
+        }}
+      />
+      <OverdueTripPrompt userId={session?.user.id} />
+    </>
   );
 }
 
@@ -164,7 +159,6 @@ const makeStyles = (c: Colors) =>
     name: { fontFamily: fonts.semibold, fontSize: 19, color: c.text },
     ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     rating: { fontFamily: fonts.regular, fontSize: 15, color: c.textSecondary },
-    toggle: { marginTop: 16 },
     items: { marginTop: 16, gap: 4 },
     item: {
       flexDirection: 'row',

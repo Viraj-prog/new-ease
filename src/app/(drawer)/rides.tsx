@@ -8,7 +8,7 @@ import { useNotify } from '@/lib/notify';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
-import { useNavigation } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { type DrawerNavigationProp } from 'expo-router/drawer';
 import { useState } from 'react';
 import {
@@ -42,7 +42,7 @@ export default function RidesScreen() {
   const insets = useSafeAreaInsets();
   const notify = useNotify();
   const { session, isDriver } = useAuth();
-  const { posted, booked, loading, error, reload, cancelPosted, cancelBooked } = useMyRides(
+  const { posted, booked, waiting, loading, error, reload, cancelPosted, cancelBooked } = useMyRides(
     session?.user.id,
     isDriver,
   );
@@ -86,9 +86,9 @@ export default function RidesScreen() {
 
             {isDriver && (
               <>
-                <Text style={styles.title}>Posted rides</Text>
+                <Text style={styles.title}>Posted Trips</Text>
                 {posted.length === 0 ? (
-                  <Text style={styles.empty}>You have no posted rides.</Text>
+                  <Text style={styles.empty}>You have no posted trips.</Text>
                 ) : (
                   <View style={styles.list}>
                     {posted.map((r) => (
@@ -97,6 +97,12 @@ export default function RidesScreen() {
                         start={r.start}
                         end={r.end}
                         when={whenText(r.departAt)}
+                        onOpen={() => router.navigate({ pathname: '/', params: { open: r.rideId } })}
+                        attention={
+                          waiting[r.rideId]
+                            ? `${waiting[r.rideId]} request${waiting[r.rideId] > 1 ? 's' : ''} waiting`
+                            : null
+                        }
                         badge={r.passenger ? 'Passenger booked' : 'No passenger yet'}
                         badgeGreen={!!r.passenger}
                         viewLabel={r.passenger ? 'View passenger' : 'No passenger yet'}
@@ -108,7 +114,7 @@ export default function RidesScreen() {
                           confirmCancel(
                             'Cancel this ride?',
                             r.passenger
-                              ? 'The booked passenger will lose this ride.'
+                              ? 'The booked passenger will lose this ride and be refunded in full.'
                               : 'This trip will be removed.',
                             () => cancelPosted(r.rideId),
                           )

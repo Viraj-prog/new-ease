@@ -4,7 +4,8 @@ import type { Req } from '@/lib/rides';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import PressButton from '@/components/PressButton';
 
 type Props = {
@@ -19,7 +20,10 @@ type Props = {
   message: string;
   onAccept: () => void;
   onDecline: () => void;
-  onNotNow: () => void;
+  // When the driver said the trip leaves. It cannot be started before then.
+  startsAt: Date;
+  // Start trip was already pressed, so the button reopens navigation.
+  started: boolean;
   onStart: () => void;
   onCancel: () => void;
 };
@@ -48,16 +52,41 @@ export default function TripSheet(p: Props) {
   const name = p.request?.passengerName ?? p.booked?.name ?? null;
   const avatar = colors.avatars[0];
 
+  // The clock, so Start trip unlocks by itself when the time comes.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  // To the minute: a 3:00 trip can be started from 3:00 on.
+  const canStart = p.started || now >= Math.floor(p.startsAt.getTime() / 60000) * 60000;
+  const startsText = p.startsAt.toLocaleString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
   const stops = <StopsList start={p.startText} end={p.endText} />;
 
   const startCancel = (
-    <View style={styles.row}>
-      <PressButton style={[styles.button, { backgroundColor: colors.success }]} onPress={p.onStart}>
-        <Text style={[styles.buttonText, { color: colors.onSuccess }]}>Start trip</Text>
-      </PressButton>
-      <PressButton style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onCancel}>
-        <Text style={[styles.buttonText, { color: colors.onAlert }]}>Cancel trip</Text>
-      </PressButton>
+    <View>
+      {!canStart && <Text style={styles.startHint}>You can start this trip on {startsText}.</Text>}
+      <View style={styles.row}>
+        <PressButton
+          style={[styles.button, { backgroundColor: canStart ? colors.success : colors.pill }]}
+          onPress={p.onStart}
+          disabled={!canStart}
+        >
+          <Text style={[styles.buttonText, { color: canStart ? colors.onSuccess : colors.textSecondary }]}>
+            {p.started ? 'Continue trip' : 'Start trip'}
+          </Text>
+        </PressButton>
+        <PressButton style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onCancel}>
+          <Text style={[styles.buttonText, { color: colors.onAlert }]}>Cancel trip</Text>
+        </PressButton>
+      </View>
     </View>
   );
 
@@ -108,9 +137,6 @@ export default function TripSheet(p: Props) {
             <Text style={[styles.buttonText, { color: colors.onBrand }]}>Accept</Text>
           </PressButton>
         </View>
-        <Pressable onPress={p.onNotNow} hitSlop={8}>
-          <Text style={styles.link}>Not now</Text>
-        </Pressable>
       </View>
     );
   }
@@ -143,7 +169,7 @@ export default function TripSheet(p: Props) {
     <View>
       {stops}
       <View style={styles.empty}>
-        <Icon name='users' size={34} color={colors.textSecondary} />
+        <Icon name='users' size={24} color={colors.textSecondary} />
         <Text style={styles.emptyTitle}>No passengers yet</Text>
         <Text style={styles.emptyText}>
           Riders within your {p.mddKm} km divergence can request this trip.
@@ -158,27 +184,21 @@ export default function TripSheet(p: Props) {
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    empty: { alignItems: 'center', gap: 6, marginTop: 18, marginBottom: 16 },
-    emptyTitle: { fontFamily: fonts.titleSemibold, fontSize: 22, color: c.text, marginTop: 4 },
+    empty: { alignItems: 'center', gap: 3, marginTop: 10, marginBottom: 8 },
+    emptyTitle: { fontFamily: fonts.titleSemibold, fontSize: 17, color: c.text, marginTop: 2 },
     emptyText: {
       fontFamily: fonts.regular,
-      fontSize: 15,
-      lineHeight: 21,
+      fontSize: 13,
+      lineHeight: 18,
       color: c.textSecondary,
       textAlign: 'center',
     },
-    message: { fontFamily: fonts.regular, fontSize: 13, color: c.textSecondary, marginTop: 6 },
-    divider: { height: 1, backgroundColor: c.border, marginBottom: 16 },
+    message: { fontFamily: fonts.regular, fontSize: 12, color: c.textSecondary, marginTop: 4 },
+    startHint: { fontFamily: fonts.regular, fontSize: 12, color: c.textSecondary, textAlign: 'center' },
+    divider: { height: 1, backgroundColor: c.border, marginBottom: 10 },
     row: { flexDirection: 'row', gap: 12, marginTop: 8 },
     button: { flex: 1, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
     buttonText: { fontFamily: fonts.semibold, fontSize: 17 },
-    link: {
-      fontFamily: fonts.semibold,
-      fontSize: 15,
-      color: c.brand,
-      textAlign: 'center',
-      marginTop: 14,
-    },
     personCard: {
       flexDirection: 'row',
       alignItems: 'center',

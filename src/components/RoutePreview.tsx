@@ -138,15 +138,16 @@ const makeStyles = (c: Colors) =>
       alignSelf: 'center',
       maxWidth: '100%',
     },
-    stat: { alignItems: 'center', gap: 2, paddingHorizontal: 11, paddingVertical: 4, borderRadius: 14 },
+    // flexShrink lets the three columns squeeze into a narrow phone instead of spilling out.
+    stat: { alignItems: 'center', gap: 2, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 14, flexShrink: 1 },
     sep: { width: 1, height: 28, backgroundColor: c.border },
-    value: { fontFamily: fonts.titleSemibold, fontSize: 17, color: c.text },
+    value: { fontFamily: fonts.titleSemibold, fontSize: 16, color: c.text },
     label: { fontFamily: fonts.regular, fontSize: 12, color: c.textSecondary },
-    labelEdit: { fontFamily: fonts.regular, fontSize: 12, color: c.text },
+    labelEdit: { fontFamily: fonts.regular, fontSize: 11, color: c.text, flexShrink: 1 },
     // The Date / Time / Max divergence labels are black; "Edit" is blue.
-    dot: { fontFamily: fonts.regular, fontSize: 12, color: c.text },
-    edit: { fontFamily: fonts.semibold, fontSize: 12, color: c.brand },
-    labelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    dot: { fontFamily: fonts.regular, fontSize: 11, color: c.text },
+    edit: { fontFamily: fonts.semibold, fontSize: 11, color: c.brand },
+    labelRow: { flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 1 },
     message: { marginTop: 10 },
     submit: {
       height: 54,

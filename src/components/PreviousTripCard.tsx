@@ -40,18 +40,35 @@ export default function PreviousTripCard({
   // The user drove: the other person was the rider, and the other way round.
   const otherRole = trip.role === 'driver' ? 'Rider' : 'Driver';
 
+  // Money coming to the user: earned by driving, or paid back after the driver cancelled.
+  const gained = trip.role === 'driver' || trip.refunded;
+
   return (
     <View style={styles.card}>
       <View style={styles.top}>
         <Text style={styles.when}>{whenText(trip.departAt)}</Text>
-        <Text style={styles.price}>
-          {trip.price == null ? '—' : `${trip.estimated ? '~' : ''}$${trip.price.toFixed(2)}`}
-        </Text>
+        {/* Green when the money came to the user, red when they paid it. */}
+        <View style={[styles.pricePill, gained ? styles.earned : styles.paid]}>
+          <Text style={[styles.price, { color: gained ? colors.onSuccessTint : colors.alertText }]}>
+            {trip.price == null ? '—' : `${trip.estimated ? '~' : ''}$${trip.price.toFixed(2)}`}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.stops}>
         <StopsList start={trip.start} end={trip.end} />
       </View>
+
+      {trip.refunded && (
+        <Text style={styles.note}>The driver cancelled this trip. You were refunded in full.</Text>
+      )}
+      {!trip.refunded && trip.cancelledAfterStart && (
+        <Text style={styles.note}>
+          {trip.role === 'driver'
+            ? 'The passenger cancelled after the trip started. You were still paid.'
+            : 'You cancelled after the trip started. The fare was still charged.'}
+        </Text>
+      )}
 
       <View style={styles.person}>
         <View style={[styles.avatar, { backgroundColor: avatar.bg }]}>
@@ -83,7 +100,11 @@ const makeStyles = (c: Colors) =>
     },
     top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     when: { fontFamily: fonts.regular, fontSize: 14, color: c.textSecondary },
-    price: { fontFamily: fonts.titleSemibold, fontSize: 22, color: c.text },
+    note: { fontFamily: fonts.regular, fontSize: 13, color: c.textSecondary },
+    pricePill: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4 },
+    earned: { backgroundColor: c.successTint },
+    paid: { backgroundColor: 'rgba(255,107,107,0.18)' },
+    price: { fontFamily: fonts.titleSemibold, fontSize: 22 },
     // Start and end in a light grey cell, like the route preview.
     stops: {
       backgroundColor: c.statBg,

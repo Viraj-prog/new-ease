@@ -29,8 +29,10 @@ export function driverExtras(r: Result): DriverExtras {
   const h = hash(r.rideId);
   const car = CARS[h % CARS.length];
   const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
-  const plate = `${letters[h % letters.length]}${letters[(h >> 3) % letters.length]}${
-    letters[(h >> 6) % letters.length]
+  // `>>>` (not `>>`) keeps the shifted number positive. A signed shift went negative for about
+  // half of all ride ids, which looked up a letter that does not exist and printed "undefined".
+  const plate = `${letters[h % letters.length]}${letters[(h >>> 3) % letters.length]}${
+    letters[(h >>> 6) % letters.length]
   } ${1000 + (h % 9000)}`;
   return {
     car: car.model,

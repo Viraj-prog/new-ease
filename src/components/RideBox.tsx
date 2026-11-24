@@ -17,6 +17,10 @@ type Props = {
   viewDisabled?: boolean;
   onView: () => void;
   onCancel: () => void;
+  // Makes the whole box tappable (a driver opening one of their trips).
+  onOpen?: () => void;
+  // Something that needs attention, e.g. "1 request waiting".
+  attention?: string | null;
 };
 
 // One ride: where it starts and ends, plus a view button and a cancel button.
@@ -30,12 +34,20 @@ export default function RideBox({
   viewDisabled = false,
   onView,
   onCancel,
+  onOpen,
+  attention,
 }: Props) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
 
-  return (
-    <View style={styles.box}>
+  const content = (
+    <>
+      {!!attention && (
+        <View style={styles.attention}>
+          <Text style={styles.attentionText}>{attention}</Text>
+        </View>
+      )}
+
       {(when || badge) && (
         <View style={styles.topRow}>
           {when && <Text style={styles.when}>{when}</Text>}
@@ -72,7 +84,16 @@ export default function RideBox({
           <Text style={[styles.buttonText, styles.cancelText]}>Cancel ride</Text>
         </PressButton>
       </View>
-    </View>
+
+      {!!onOpen && <Text style={styles.openHint}>Tap the trip to open it</Text>}
+    </>
+  );
+
+  if (!onOpen) return <View style={styles.box}>{content}</View>;
+  return (
+    <PressButton ghost pressScale={0.98} style={styles.box} onPress={onOpen}>
+      {content}
+    </PressButton>
   );
 }
 
@@ -91,6 +112,15 @@ const makeStyles = (c: Colors) =>
       shadowRadius: 6,
       elevation: 3,
     },
+    attention: {
+      alignSelf: 'flex-start',
+      backgroundColor: c.brand,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    attentionText: { fontFamily: fonts.semibold, fontSize: 12, color: c.onBrand },
+    openHint: { fontFamily: fonts.regular, fontSize: 12, color: c.textSecondary, textAlign: 'center' },
     topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     when: { fontFamily: fonts.regular, fontSize: 12, color: c.textSecondary },
     badge: { backgroundColor: c.pill, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },

@@ -13,20 +13,22 @@ type Props = {
   kind: 'success' | 'alert';
   title: string;
   subtitle?: string;
+  sticky?: boolean;
   onClose: () => void;
 };
 
-// In-app notification that slides in at the top, then hides itself after a few seconds.
-export default function Banner({ visible, kind, title, subtitle, onClose }: Props) {
+// In-app notification that slides in at the top, then hides itself after a few seconds (a sticky
+// one waits to be tapped).
+export default function Banner({ visible, kind, title, subtitle, sticky, onClose }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = makeStyles(colors);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || sticky) return;
     const t = setTimeout(onClose, 4500);
     return () => clearTimeout(t);
-  }, [visible, onClose]);
+  }, [visible, sticky, onClose]);
 
   if (!visible) return null;
   const ok = kind === 'success';
@@ -48,7 +50,7 @@ export default function Banner({ visible, kind, title, subtitle, onClose }: Prop
           <Text style={styles.title}>{title}</Text>
           {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
         </View>
-        <Text style={styles.now}>now</Text>
+        <Text style={styles.now}>{sticky ? 'Dismiss' : 'now'}</Text>
       </Pressable>
     </Animated.View>
   );

@@ -2,12 +2,13 @@ import SegmentedToggle from '@/components/SegmentedToggle';
 import { useTheme } from '@/lib/theme';
 
 // Moon / sun switch that sits above the home sheet.
-export default function ThemeToggle() {
+export default function ThemeToggle({ depth }: { depth?: boolean }) {
   const { mode, setMode } = useTheme();
 
   return (
     <SegmentedToggle
       compact
+      depth={depth}
       // Larger than the Driver / Rider switch, so it is easier to hit.
       segment={40}
       options={[

@@ -19,6 +19,11 @@ export type PreviousTrip = {
   // Where that destination is on the map, when known (used to look up its street address).
   destinationPoint: Pt | null;
   price: number | null;
+  // The passenger cancelled after the driver pressed Start trip. The fare still counts: the driver
+  // earns it and the passenger pays it.
+  cancelledAfterStart: boolean;
+  // The driver cancelled a trip the passenger was booked on, so the fare was paid back.
+  refunded: boolean;
   // True when the price had not been saved and is worked out from the distance instead.
   estimated: boolean;
 };
@@ -45,6 +50,10 @@ type RequestRow = {
   // Only present once previous_trips.sql has been run.
   price?: number | string | null;
   dropoffText?: string | null;
+  // Only present once supabase/cancellations.sql has been run.
+  cancelledAfterStart?: boolean | null;
+  // Only present once supabase/trip_rules.sql has been run.
+  refundedAt?: string | null;
 };
 
 function priceOf(r: RequestRow): { price: number; estimated: boolean } {
@@ -62,15 +71,27 @@ const fullName = (u: { firstName: string | null; lastName: string | null } | nul
 
 // Passenger: finished rides they were accepted on.
 async function loadAsRider(userId: string): Promise<PreviousTrip[]> {
-  const { data, error } = await supabase
-    .from('ride_requests')
-    .select(
-      `*, rides!inner ( rideId, driverStartLocation, driverEndLocation, departAt, isCompleted,
-               drivers ( users ( firstName, lastName ) ) )`,
-    )
-    .eq('passengerId', userId)
-    .eq('status', 'accepted')
-    .eq('rides.isCompleted', true);
+  const find = (withCancelled: boolean, withRefunds: boolean) => {
+    const q = supabase
+      .from('ride_requests')
+      .select(
+        `*, rides!inner ( rideId, driverStartLocation, driverEndLocation, departAt, isCompleted,
+                 drivers ( users ( firstName, lastName ) ) )`,
+      )
+      .eq('passengerId', userId)
+      .eq('rides.isCompleted', true);
+    // A trip cancelled after it started still counts, because the fare is still charged.
+    // A trip the driver cancelled is listed too, to show the refund.
+    const refunds = withRefunds ? ',refundedAt.not.is.null' : '';
+    return withCancelled
+      ? q.or(`status.eq.accepted,and(status.eq.cancelled,cancelledAfterStart.eq.true)${refunds}`)
+      : q.eq('status', 'accepted');
+  };
+  let { data, error } = await find(true, true);
+  // Before supabase/trip_rules.sql has been run there is no "refundedAt" column yet.
+  if (error && /refundedAt/i.test(error.message)) ({ data, error } = await find(true, false));
+  // Before supabase/cancellations.sql has been run there is no "cancelledAfterStart" column yet.
+  if (error && /cancelledAfterStart/i.test(error.message)) ({ data, error } = await find(false, false));
   if (error) throw error;
 
   type Row = RequestRow & {
@@ -91,12 +112,14 @@ async function loadAsRider(userId: string): Promise<PreviousTrip[]> {
     destination: r.dropoffText?.trim() || r.rides.driverEndLocation,
     destinationPoint: { lat: r.dropoffLat, lng: r.dropoffLng },
     otherName: fullName(r.rides.drivers?.users, 'Driver'),
+    cancelledAfterStart: !!r.cancelledAfterStart,
+    refunded: !!r.refundedAt,
     ...priceOf(r),
   }));
 }
 
-// Driver: finished trips that had a passenger on them. Trips nobody booked, and trips that
-// were cancelled (their requests become 'cancelled'), are left out.
+// Driver: finished trips that had a passenger on them. Trips nobody booked, and trips the driver
+// cancelled, are left out. A trip whose passenger cancelled after it started is kept.
 async function loadAsDriver(userId: string): Promise<PreviousTrip[]> {
   const { data: rides, error } = await supabase
     .from('rides')
@@ -106,11 +129,19 @@ async function loadAsDriver(userId: string): Promise<PreviousTrip[]> {
   if (error) throw error;
   if (!rides?.length) return [];
 
-  const { data: reqs, error: reqError } = await supabase
-    .from('ride_requests')
-    .select('*')
-    .in('selectedRideId', rides.map((r) => r.rideId))
-    .eq('status', 'accepted');
+  const findRequests = (withCancelled: boolean) => {
+    const q = supabase
+      .from('ride_requests')
+      .select('*')
+      .in('selectedRideId', rides.map((r) => r.rideId));
+    return withCancelled
+      ? q.or('status.eq.accepted,and(status.eq.cancelled,cancelledAfterStart.eq.true)')
+      : q.eq('status', 'accepted');
+  };
+  let { data: reqs, error: reqError } = await findRequests(true);
+  if (reqError && /cancelledAfterStart/i.test(reqError.message)) {
+    ({ data: reqs, error: reqError } = await findRequests(false));
+  }
   if (reqError) throw reqError;
   const accepted = (reqs ?? []) as RequestRow[];
   if (accepted.length === 0) return [];
@@ -123,7 +154,8 @@ async function loadAsDriver(userId: string): Promise<PreviousTrip[]> {
 
   return accepted.flatMap((r) => {
     const ride = rides.find((x) => x.rideId === r.selectedRideId);
-    if (!ride) return [];
+    // A refunded request belongs to a trip the driver cancelled: nothing was earned.
+    if (!ride || r.refundedAt) return [];
     const person = people?.find((u) => u.userId === r.passengerId);
     return [
       {
@@ -136,6 +168,8 @@ async function loadAsDriver(userId: string): Promise<PreviousTrip[]> {
         destinationPoint:
           ride.endLat != null && ride.endLng != null ? { lat: ride.endLat, lng: ride.endLng } : null,
         otherName: fullName(person, 'Passenger'),
+        cancelledAfterStart: !!r.cancelledAfterStart,
+        refunded: false,
         ...priceOf(r),
       },
     ];
