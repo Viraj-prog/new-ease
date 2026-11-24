@@ -22,6 +22,7 @@ type Props = {
   // null = leave now.
   when: Date | null;
   onPickDate: () => void;
+  driverOptions?: { mdd: number; pricePerKm: number | null; onEdit: () => void };
   pickup: string;
   onPickup: (s: string) => void;
   destination: string;
@@ -115,6 +116,20 @@ export default function PlanForm(p: Props) {
           <Text style={styles.pillText}>{formatWhen(p.when ?? new Date())}</Text>
         </PressButton>
       </View>
+
+      {p.driverOptions && (
+        <View style={styles.pillRow}>
+          <PressButton ghost style={styles.pill} onPress={p.driverOptions.onEdit}>
+            <Text style={styles.pillText}>
+              {p.driverOptions.mdd} km divergence · {
+                p.driverOptions.pricePerKm === null
+                  ? 'Set price per km'
+                  : `${p.driverOptions.pricePerKm.toFixed(2)} per km`
+              }
+            </Text>
+          </PressButton>
+        </View>
+      )}
 
       <View style={styles.fields}>
         <View style={styles.connector}>

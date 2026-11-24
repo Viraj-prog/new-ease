@@ -3,7 +3,6 @@ import { errText, resolveDestination, resolveStart } from '@/lib/places';
 import {
   answerRequest,
   finishTrip,
-  hasUnfinishedTrip,
   isTripActive,
   loadActiveTrip,
   loadRequests,
@@ -25,13 +24,13 @@ export function useDriverFlow(userId: string | undefined, active = true) {
   // Requests the driver closed with "Not now", so the popup does not keep coming back.
   const [dismissed, setDismissed] = useState<string[]>([]);
 
-  function clear() {
+  const clear = useCallback(() => {
     setMsg('');
     setTrip(null);
     setRequests([]);
     setSelectedId(null);
     setDismissed([]);
-  }
+  }, []);
 
   // Returns true when the trip was posted.
   async function post(
@@ -39,16 +38,12 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     endText: string,
     when: Date,
     mdd: number,
-    extra: number,
+    pricePerKm: number,
   ): Promise<boolean> {
     if (!userId) return false;
     clear();
     setLoading(true);
     try {
-      if (await hasUnfinishedTrip(userId, when)) {
-        setMsg('You already have an unfinished trip on that day. Finish it before posting another.');
-        return false;
-      }
       const start = await resolveStart(startText);
       const end = await resolveDestination(endText);
       if (!end) {
@@ -67,7 +62,7 @@ export function useDriverFlow(userId: string | undefined, active = true) {
         end,
         when,
         mdd,
-        extra,
+        pricePerKm,
       });
       if (!t) {
         setMsg('No road route found between those places.');
@@ -78,7 +73,8 @@ export function useDriverFlow(userId: string | undefined, active = true) {
       return true;
     } catch (e) {
       console.error(e);
-      setMsg(errText(e));
+      const overlap = (e as { code?: string } | null)?.code === '23P01';
+      setMsg(overlap ? 'This ride overlaps another scheduled ride. Choose a different departure time.' : errText(e));
       return false;
     } finally {
       setLoading(false);
@@ -93,7 +89,7 @@ export function useDriverFlow(userId: string | undefined, active = true) {
 
   // Match the screen to the database: drop a trip that was finished or cancelled elsewhere
   // (for example from the Rides tab), or bring back an unfinished one after a restart.
-  async function sync() {
+  const sync = useCallback(async () => {
     if (!userId) return;
     try {
       const shown = tripRef.current;
@@ -104,18 +100,17 @@ export function useDriverFlow(userId: string | undefined, active = true) {
       const t = await loadActiveTrip(userId);
       if (t) {
         setTrip((current) => current ?? t);
-        setMsg((m) => m || 'You have an unfinished trip. Finish it to post another.');
       }
     } catch (e) {
       console.error(e);
     }
-  }
+  }, [clear, userId]);
 
   // Check every time the Home screen comes back into view (in driver mode).
   useFocusEffect(
     useCallback(() => {
       if (active) sync();
-    }, [active, userId]),
+    }, [active, sync]),
   );
 
   // Mark the shown trip finished and clear it from the screen. Returns null on success, or the
@@ -184,7 +179,7 @@ export function useDriverFlow(userId: string | undefined, active = true) {
   const markers: MapMarker[] = requests.map((r) => ({
     id: r.id,
     point: r.pickup,
-    color: r.zone === 'in_range' ? '#16a34a' : '#f97316',
+    color: '#16a34a',
     onPress: () => setSelectedId(r.id),
   }));
 

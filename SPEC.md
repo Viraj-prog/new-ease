@@ -121,7 +121,7 @@ Do not build these. If a task seems to need one of them, ask the user first.
 
 First, **do not trust this section's column names blindly.** `driver_setup.sql` is a patch file, not the full schema. Phase 0 (section 9) has you collect the real schema from the user before writing any migration.
 
-Existing tables: `users` (keyed by `"userId"`), `drivers`, `rides`, `ride_requests`, `saved_places`, `recent_places` (names and quoted camelCase columns as in the scripts in `supabase/`). Keep that naming style. Ask the user to confirm that `saved_trips.sql` and `previous_trips.sql` have been run.
+The live schema report confirmed `users`, `drivers`, `rides`, `ride_requests`, `saved_places` and `recent_places`. The primary keys of `rides` and `ride_requests` are UUIDs named `"rideId"` and `id`, respectively. Keep the existing naming style.
 
 ### Changes to `rides`
 
@@ -131,11 +131,12 @@ Existing tables: `users` (keyed by `"userId"`), `drivers`, `rides`, `ride_reques
 - Add `"plan" jsonb`: the current pickup plan, shaped like `{ stops: [{ type: 'pickup'|'dropoff', requestId, lat, lng }], points: [{lat,lng}], distanceKm, durationMin, passengerIds: [uuid] }`.
 - Stop using `occupied`, `requestorId` and `"maxExtraKm"`. Leave the columns in place until the cleanup phase, then drop them.
 - Replace the `guard_one_trip_per_day` trigger with an **overlap check** (see section 4): a new or rescheduled ride may not overlap another `scheduled` or `in_progress` ride of the same driver.
+- Require a departure time and valid route duration for newly scheduled rides. The live `"departAt"` and `route` columns are nullable, so check active legacy rides for missing scheduling data before replacing the trigger. The legacy `"isCompleted"` flag alone cannot distinguish completed trips from cancellations.
 
 ### Changes to `ride_requests` (the passenger's search)
 
 - Add `"directKm" numeric` and `"directMin" numeric` (the passenger's own pickup-to-drop-off road distance and time, computed in the app with OSRM when the search is saved).
-- Add `"acceptedRideId" uuid`. **Reuse the existing `price numeric(8, 2)` column as the agreed fare** instead of adding `"agreedFare"`: it stays null until a driver accepts, then holds the fare. Stop writing the old distance x 2.5 value when a request is sent. Keep `"dropoffText"`.
+- Add `"acceptedRideId" uuid` referencing `rides("rideId")`. Reuse the existing nullable `price numeric(8, 2)` as the agreed fare. Preserve historical prices and validate that new fares fit the column's precision. Leave the fare null on new requests until acceptance and keep `"dropoffText"`.
 - `status` becomes `open` (searching), `accepted`, or `cancelled`. The old `pending` and `declined` states move to the new table below. Stop using `"selectedRideId"` and `"needsApproval"`. `useMyRides`, `previousTrips.ts` and the passenger flow read `selectedRideId` today, so move them to offers in the same phase.
 
 ### New table `ride_offers` (a passenger's request to one ride)
@@ -160,6 +161,7 @@ Existing tables: `users` (keyed by `"userId"`), `drivers`, `rides`, `ride_reques
 
 ### Row-level security
 
+- RLS is enabled on all six live tables. During the offers migration, review client dependencies and remove or narrow the broad permissive development policies on `users`, `drivers`, `rides` and `ride_requests`. Replace the policies and `guard_request_target` trigger that rely on `"selectedRideId"` when the app moves to offers. Review driver-profile visibility for users who also search as passengers.
 - `ride_offers`: a passenger reads offers for their own requests, a driver reads offers for their own rides, and nobody inserts or updates directly (only through the functions above).
 - A driver may read `ride_requests` rows that are `open` or that have an offer on one of their rides, and nothing else.
 - Replace the policy `users read requesters of my rides`: a driver may read a passenger's name only if that passenger has an offer (`pending` or `accepted`) on one of the driver's rides. Searching passengers who have not requested that driver must not be readable, and the app shows "A passenger" for them.
@@ -168,6 +170,8 @@ Existing tables: `users` (keyed by `"userId"`), `drivers`, `rides`, `ride_reques
 
 ## 8. Pickup plan
 
+- Keep the original posted route in `rides.route` for divergence checks and store the computed pickup route separately in `rides.plan`.
+- Backfill existing accepted bookings using their recorded request-to-ride links. Leave direct distance and duration unset until OSRM computes them. A ride can accept another passenger once each existing passenger's direct duration is available for the 1.5× check.
 - Inputs: the driver's start and destination, and for each accepted passenger a pickup point and a drop-off point.
 - Goal: the stop order with the **lowest total driving time**, such that every pickup comes before its own drop-off and every passenger's time between pickup and drop-off is at most **1.5 times** their direct trip time (`"directMin"`).
 - Get driving times between all stops with one OSRM `table` request, then search the orderings. For up to about 5 passengers, check every valid ordering. For more, build the order by cheapest insertion and then improve it with simple swaps. Always validate the final order against the 1.5x cap.

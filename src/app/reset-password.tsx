@@ -21,7 +21,14 @@ export default function ResetPasswordScreen() {
   const notify = useNotify();
   const { session, beginRecovery, endRecovery } = useAuth();
   const url = Linking.useLinkingURL();
-  const [status, setStatus] = useState<Status>('verifying');
+  const params = readFragment(url ?? '');
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  const isRecoveryLink = params.get('type') === 'recovery' && !!accessToken && !!refreshToken;
+  const [verification, setVerification] = useState<{ url: typeof url; status: Status } | null>(null);
+  const status = isRecoveryLink
+    ? verification?.url === url && verification ? verification.status : 'verifying'
+    : 'invalid';
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
@@ -37,13 +44,7 @@ export default function ResetPasswordScreen() {
 
   // Turn the emailed link into a recovery session so updateUser is allowed.
   useEffect(() => {
-    const params = readFragment(url ?? '');
-    const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token');
-    if (params.get('type') !== 'recovery' || !accessToken || !refreshToken) {
-      setStatus('invalid');
-      return;
-    }
+    if (!isRecoveryLink || !accessToken || !refreshToken) return;
 
     let cancelled = false;
     // Hide the session from the rest of the app before it exists.
@@ -52,18 +53,18 @@ export default function ResetPasswordScreen() {
     supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ error }) => {
       if (cancelled) return;
       if (!error) {
-        setStatus('ready');
+        setVerification({ url, status: 'ready' });
         return;
       }
       console.warn('recovery setSession failed', error.message);
       recovering.current = false;
       endRecovery(true);
-      setStatus('invalid');
+      setVerification({ url, status: 'invalid' });
     });
     return () => {
       cancelled = true;
     };
-  }, [url]);
+  }, [accessToken, beginRecovery, endRecovery, isRecoveryLink, refreshToken, url]);
 
   async function submit() {
     const problem = passwordProblem(password, confirm);

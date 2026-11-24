@@ -22,6 +22,7 @@ type Props = {
   onNotNow: () => void;
   onStart: () => void;
   onCancel: () => void;
+  onScheduleAnother: () => void;
 };
 
 // Which title the map chip above the sheet should show for the current state.
@@ -51,20 +52,24 @@ export default function TripSheet(p: Props) {
   const stops = <StopsList start={p.startText} end={p.endText} />;
 
   const startCancel = (
-    <View style={styles.row}>
-      <PressButton style={[styles.button, { backgroundColor: colors.success }]} onPress={p.onStart}>
-        <Text style={[styles.buttonText, { color: colors.onSuccess }]}>Start trip</Text>
-      </PressButton>
-      <PressButton style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onCancel}>
-        <Text style={[styles.buttonText, { color: colors.onAlert }]}>Cancel trip</Text>
-      </PressButton>
+    <View>
+      <View style={styles.row}>
+        <PressButton style={[styles.button, { backgroundColor: colors.success }]} onPress={p.onStart}>
+          <Text style={[styles.buttonText, { color: colors.onSuccess }]}>Start trip</Text>
+        </PressButton>
+        <PressButton style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onCancel}>
+          <Text style={[styles.buttonText, { color: colors.onAlert }]}>Cancel trip</Text>
+        </PressButton>
+      </View>
+      <Pressable onPress={p.onScheduleAnother} hitSlop={8}>
+        <Text style={styles.link}>Schedule another ride</Text>
+      </Pressable>
     </View>
   );
 
   // A passenger is asking for this trip.
   if (p.request) {
     const r = p.request;
-    const inRange = r.zone === 'in_range';
     const worst = Math.max(r.pickupKm, r.dropoffKm);
     return (
       <View>
@@ -91,12 +96,10 @@ export default function TripSheet(p: Props) {
           </View>
         </View>
 
-        <View style={[styles.note, !inRange && styles.noteWarn]}>
-          <Icon name='check-circle' size={22} color={inRange ? colors.onTint : colors.alertText} />
+        <View style={styles.note}>
+          <Icon name='check-circle' size={22} color={colors.onTint} />
           <Text style={styles.noteText}>
-            {inRange
-              ? `Detour ${worst.toFixed(1)} km · within your ${p.mddKm} km limit`
-              : `${(worst - p.mddKm).toFixed(1)} km beyond your ${p.mddKm} km limit. Drive the extra distance?`}
+            {`Detour ${worst.toFixed(1)} km · within your ${p.mddKm} km limit`}
           </Text>
         </View>
 
@@ -211,6 +214,5 @@ const makeStyles = (c: Colors) =>
       marginTop: 6,
       marginBottom: 6,
     },
-    noteWarn: { backgroundColor: c.card },
     noteText: { flex: 1, fontFamily: fonts.medium, fontSize: 15, color: c.text },
   });

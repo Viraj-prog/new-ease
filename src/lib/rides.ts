@@ -1,4 +1,4 @@
-import { classifyTrip, dayRange, localDate, type Pt, type Zone } from './geo';
+import { classifyTrip, dayRange, localDate, type Pt } from './geo';
 import { getRoute } from './routing';
 import { supabase } from './supabase';
 
@@ -9,7 +9,6 @@ export type Trip = {
   distanceKm: number;
   durationMin: number;
   mdd: number;
-  extra: number;
   when: Date;
 };
 
@@ -17,7 +16,6 @@ export type Trip = {
 export type Req = {
   id: string;
   status: string;
-  zone: Zone;
   pickupKm: number;
   dropoffKm: number;
   pickup: Pt;
@@ -34,7 +32,6 @@ type RideRow = {
   endLat: number;
   endLng: number;
   tripMdd: number | null;
-  maxExtraKm: number | null;
   route: { points: Pt[]; distanceKm: number; durationMin: number } | null;
   drivers: {
     driverRating: number | null;
@@ -48,7 +45,6 @@ export type Result = {
   rideId: string;
   driverName: string;
   rating: number | null;
-  zone: Zone;
   pickupKm: number;
   dropoffKm: number;
   tripKm: number;
@@ -67,7 +63,7 @@ export async function postTrip(args: {
   end: Pt;
   when: Date;
   mdd: number;
-  extra: number;
+  pricePerKm: number;
 }): Promise<Trip | null> {
   const r = await getRoute([args.start, args.end]);
   if (!r) return null;
@@ -85,7 +81,8 @@ export async function postTrip(args: {
       endLat: args.end.lat,
       endLng: args.end.lng,
       tripMdd: args.mdd,
-      maxExtraKm: args.extra,
+      pricePerKm: args.pricePerKm,
+      status: 'scheduled',
       route: { points: r.points, distanceKm: r.distanceKm, durationMin: r.durationMin },
       isCompleted: false,
       occupied: false,
@@ -100,21 +97,8 @@ export async function postTrip(args: {
     distanceKm: r.distanceKm,
     durationMin: r.durationMin,
     mdd: args.mdd,
-    extra: args.extra,
     when: args.when,
   };
-}
-
-// Driver: is there already an unfinished trip on that day?
-export async function hasUnfinishedTrip(driverId: string, when: Date): Promise<boolean> {
-  const { count, error } = await supabase
-    .from('rides')
-    .select('rideId', { count: 'exact', head: true })
-    .eq('driverId', driverId)
-    .eq('date', localDate(when))
-    .or('isCompleted.is.null,isCompleted.eq.false');
-  if (error) throw error;
-  return (count ?? 0) > 0;
 }
 
 // Driver: is this trip still unfinished? False once it was finished or cancelled anywhere.
@@ -132,7 +116,7 @@ export async function isTripActive(rideId: string): Promise<boolean> {
 export async function loadActiveTrip(driverId: string): Promise<Trip | null> {
   const { data, error } = await supabase
     .from('rides')
-    .select('rideId, route, tripMdd, maxExtraKm, departAt')
+    .select('rideId, route, tripMdd, departAt')
     .eq('driverId', driverId)
     .or('isCompleted.is.null,isCompleted.eq.false')
     .order('departAt', { ascending: true })
@@ -146,7 +130,6 @@ export async function loadActiveTrip(driverId: string): Promise<Trip | null> {
     distanceKm: data.route.distanceKm,
     durationMin: data.route.durationMin,
     mdd: data.tripMdd ?? 2,
-    extra: data.maxExtraKm ?? 2,
     when: data.departAt ? new Date(data.departAt) : new Date(),
   };
 }
@@ -172,7 +155,7 @@ export async function loadRequests(trip: Trip): Promise<Req[]> {
   for (const r of data ?? []) {
     const pickup = { lat: r.pickupLat, lng: r.pickupLng };
     const dropoff = { lat: r.dropoffLat, lng: r.dropoffLng };
-    const c = classifyTrip(trip.route, pickup, dropoff, trip.mdd, trip.extra);
+    const c = classifyTrip(trip.route, pickup, dropoff, trip.mdd);
     if (c.zone === 'out') continue;
     found.push({
       id: r.id,
@@ -181,7 +164,8 @@ export async function loadRequests(trip: Trip): Promise<Req[]> {
       passengerId: r.passengerId,
       passengerName: null,
       departAt: r.departAt ?? null,
-      ...c,
+      pickupKm: c.pickupKm,
+      dropoffKm: c.dropoffKm,
     });
   }
 
@@ -258,7 +242,7 @@ export async function searchRides(from: Pt, to: Pt, when: Date, userId: string):
   const { data, error } = await supabase
     .from('rides')
     .select(
-      `rideId, driverId, startLat, startLng, endLat, endLng, tripMdd, maxExtraKm, route,
+      `rideId, driverId, startLat, startLng, endLat, endLng, tripMdd, route,
        drivers ( driverRating, mdd, users ( firstName, lastName ) )`,
     )
     .neq('driverId', userId)
@@ -272,8 +256,7 @@ export async function searchRides(from: Pt, to: Pt, when: Date, userId: string):
   for (const r of (data ?? []) as unknown as RideRow[]) {
     if (!r.route?.points?.length) continue;
     const mdd = r.tripMdd ?? r.drivers?.mdd ?? 2;
-    const maxExtra = r.maxExtraKm ?? 2;
-    const c = classifyTrip(r.route.points, from, to, mdd, maxExtra);
+    const c = classifyTrip(r.route.points, from, to, mdd);
     if (c.zone === 'out') continue;
     const u = r.drivers?.users;
     const name = u ? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() : '';
@@ -281,7 +264,6 @@ export async function searchRides(from: Pt, to: Pt, when: Date, userId: string):
       rideId: r.rideId,
       driverName: name || 'Driver',
       rating: r.drivers?.driverRating ?? null,
-      zone: c.zone,
       pickupKm: c.pickupKm,
       dropoffKm: c.dropoffKm,
       tripKm: r.route.distanceKm,
@@ -291,13 +273,7 @@ export async function searchRides(from: Pt, to: Pt, when: Date, userId: string):
       end: { lat: r.endLat, lng: r.endLng },
     });
   }
-  list.sort((x, y) =>
-    x.zone === y.zone
-      ? x.pickupKm + x.dropoffKm - (y.pickupKm + y.dropoffKm)
-      : x.zone === 'in_range'
-        ? -1
-        : 1,
-  );
+  list.sort((x, y) => x.pickupKm + x.dropoffKm - (y.pickupKm + y.dropoffKm));
   return list;
 }
 
@@ -332,7 +308,7 @@ export async function sendRequest(requestId: string, r: Result) {
     .update({
       selectedRideId: r.rideId,
       status: 'pending',
-      needsApproval: r.zone === 'needs_approval',
+      needsApproval: false,
     })
     .eq('id', requestId);
   if (error) throw error;

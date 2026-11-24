@@ -57,7 +57,6 @@ const SNAP = { MID: 1, TRIP: 2, FULL: 3 };
 
 // How much farther than the max divergence a driver will go if they approve a request.
 // There is no control for it any more, so it stays at this default.
-const EXTRA_KM = 2;
 
 export default function HomeScreen() {
   const { colors } = useTheme();
@@ -74,6 +73,7 @@ export default function HomeScreen() {
   const [destination, setDestination] = useState('');
   const [when, setWhen] = useState<Date | null>(null); // null = leave now
   const [mdd, setMdd] = useState(2);
+  const [pricePerKm, setPricePerKm] = useState<number | null>(null);
   const [mddOpen, setMddOpen] = useState(false);
   // 'home' shows recent / saved trips; 'plan' shows the search form and results.
   const [view, setView] = useState<'home' | 'plan'>('home');
@@ -332,8 +332,12 @@ export default function HomeScreen() {
   // Post the trip being previewed. The preview goes away once it is posted.
   async function onPost() {
     Keyboard.dismiss();
+    if (pricePerKm === null) {
+      setMddOpen(true);
+      return;
+    }
     passenger.clear();
-    const ok = await driver.post(pickup, destination, when ?? new Date(), mdd, EXTRA_KM);
+    const ok = await driver.post(pickup, destination, when ?? new Date(), mdd, pricePerKm);
     if (ok) setPreview(null);
   }
 
@@ -558,6 +562,11 @@ export default function HomeScreen() {
                   onNotNow={driver.closePopup}
                   onStart={() => setNavigating(true)}
                   onCancel={() => setConfirmCancel(true)}
+                  onScheduleAnother={() => {
+                    clearFields();
+                    setWhen(null);
+                    openPlan();
+                  }}
                 />
               ) : previewNow ? (
                 <RoutePreview
@@ -569,8 +578,9 @@ export default function HomeScreen() {
                   distanceKm={previewNow.distanceKm}
                   durationMin={previewNow.durationMin}
                   maxDivergenceKm={driverMode ? mdd : undefined}
+                  pricePerKm={driverMode ? pricePerKm : undefined}
                   onMaxDivergence={driverMode ? () => setMddOpen(true) : undefined}
-                  submitLabel={driverMode ? 'Post trip' : 'Find driver'}
+                  submitLabel={driverMode ? 'Schedule Ride' : 'Find driver'}
                   onSubmit={driverMode ? onPost : onFind}
                   loading={driverMode ? driver.loading : passenger.loading}
                 />
@@ -584,6 +594,7 @@ export default function HomeScreen() {
                     onRole={choose}
                     when={when}
                     onPickDate={() => pickDateTime(when ?? new Date(), setWhen)}
+                    driverOptions={driverMode ? { mdd, pricePerKm, onEdit: () => setMddOpen(true) } : undefined}
                     pickup={pickup}
                     onPickup={setPickup}
                     destination={destination}
@@ -651,7 +662,7 @@ export default function HomeScreen() {
       {/* Passenger: spinner while waiting for the driver, then accepted or declined. */}
       {/* Looking for drivers after Find driver. */}
       <LoadingPopup visible={quickLoading} title='Getting Trip Ready' />
-      <LoadingPopup visible={driverMode && driver.loading} title='Posting Trip' />
+      <LoadingPopup visible={driverMode && driver.loading} title='Scheduling Ride' />
 
       <LoadingPopup
         visible={passenger.loading && !driverMode}
@@ -684,8 +695,10 @@ export default function HomeScreen() {
       <DivergenceModal
         visible={mddOpen}
         value={mdd}
-        onSave={(km) => {
+        pricePerKm={pricePerKm}
+        onSave={(km, price) => {
           setMdd(km);
+          setPricePerKm(price);
           setMddOpen(false);
         }}
         onClose={() => setMddOpen(false)}

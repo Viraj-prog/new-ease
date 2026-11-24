@@ -18,6 +18,7 @@ type Props = {
   durationMin: number;
   // Drivers only: how far they will go off their route. Tapping it opens the slider.
   maxDivergenceKm?: number;
+  pricePerKm?: number | null;
   onMaxDivergence?: () => void;
   submitLabel: string;
   onSubmit: () => void;
@@ -83,7 +84,7 @@ export default function RoutePreview(p: Props) {
               <Text style={styles.value}>{p.maxDivergenceKm} km</Text>
               <View style={styles.labelRow}>
                 <Text style={styles.labelEdit} numberOfLines={1}>
-                  Max divergence
+                  {p.pricePerKm == null ? 'Set price/km' : `${p.pricePerKm.toFixed(2)}/km`}
                 </Text>
                 <Text style={styles.dot}>·</Text>
                 <Text style={styles.edit}>Edit</Text>

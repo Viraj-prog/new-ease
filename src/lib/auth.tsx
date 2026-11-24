@@ -38,14 +38,25 @@ const AuthContext = createContext<AuthState>({
 
 export const useAuth = () => useContext(AuthContext);
 
+async function readDriverFlag(userId: string) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('isDriver')
+    .eq('userId', userId)
+    .maybeSingle();
+  if (error) console.warn('load profile failed', error.message);
+  return !!data?.isDriver;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [recovering, setRecovering] = useState(false);
-  const [isDriver, setIsDriver] = useState(false);
+  const [driverProfile, setDriverProfile] = useState<{ userId: string; isDriver: boolean } | null>(null);
   // Drivers can switch to passenger view and back; remembered per user on this device.
   const [driverPref, setDriverPref] = useState(true);
   const userId = session?.user.id;
+  const isDriver = !!userId && driverProfile?.userId === userId && driverProfile.isDriver;
   const prefKey = `driverMode.${userId}`;
 
   useEffect(() => {
@@ -68,22 +79,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    if (!userId) {
-      setIsDriver(false);
-      return;
-    }
-    const { data, error } = await supabase
-      .from('users')
-      .select('isDriver')
-      .eq('userId', userId)
-      .maybeSingle();
-    if (error) console.warn('load profile failed', error.message);
-    setIsDriver(!!data?.isDriver);
+    if (!userId) return;
+    const isDriver = await readDriverFlag(userId);
+    setDriverProfile({ userId, isDriver });
   }, [userId]);
 
   useEffect(() => {
-    refreshProfile();
-  }, [refreshProfile]);
+    if (!userId) return;
+    let active = true;
+    readDriverFlag(userId).then((isDriver) => {
+      if (active) setDriverProfile({ userId, isDriver });
+    });
+    return () => {
+      active = false;
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;

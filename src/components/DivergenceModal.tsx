@@ -5,14 +5,15 @@ import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import PressButton from '@/components/PressButton';
 
 type Props = {
   visible: boolean;
   value: number;
-  onSave: (km: number) => void;
+  pricePerKm: number | null;
+  onSave: (km: number, pricePerKm: number | null) => void;
   onClose: () => void;
 };
 
@@ -20,17 +21,24 @@ const MIN_KM = 0.5;
 const MAX_KM = 5;
 
 // Driver: how far off their route they will go to pick up or drop off a rider.
-export default function DivergenceModal({ visible, value, onSave, onClose }: Props) {
+export default function DivergenceModal({ visible, value, pricePerKm, onSave, onClose }: Props) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
   // What the slider shows while dragging; only saved when Save is pressed.
   const [draft, setDraft] = useState(value);
+  const [price, setPrice] = useState('');
+  const enteredPrice = price.trim().replace(',', '.');
+  const validPrice = /^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(enteredPrice)
+    && Number.isFinite(Number(enteredPrice));
 
   return (
     <PopupShell
       visible={visible}
       onClose={onClose}
-      onShow={() => setDraft(value)}
+      onShow={() => {
+        setDraft(value);
+        setPrice(pricePerKm?.toString() ?? '');
+      }}
       inset={20}
       style={styles.card}
     >
@@ -58,11 +66,29 @@ export default function DivergenceModal({ visible, value, onSave, onClose }: Pro
         <Text style={styles.rangeText}>{MAX_KM} km</Text>
       </View>
 
+      <Text style={styles.priceLabel}>Price per km</Text>
+      <TextInput
+        accessibilityLabel='Price per km'
+        inputMode='decimal'
+        placeholder='0.00'
+        placeholderTextColor={colors.textSecondary}
+        style={styles.priceInput}
+        value={price}
+        onChangeText={setPrice}
+      />
+      {!!enteredPrice && !validPrice && (
+        <Text style={styles.rangeText}>Enter a nonnegative price with up to two decimal places.</Text>
+      )}
+
       <View style={styles.buttons}>
         <PressButton ghost style={[styles.button, styles.cancel]} onPress={onClose}>
           <Text style={styles.cancelText}>Cancel</Text>
         </PressButton>
-        <PressButton style={styles.button} onPress={() => onSave(draft)}>
+        <PressButton
+          style={styles.button}
+          disabled={!!enteredPrice && !validPrice}
+          onPress={() => onSave(draft, enteredPrice ? Number(enteredPrice) : null)}
+        >
           <Text style={styles.saveText}>Save</Text>
         </PressButton>
       </View>
@@ -99,6 +125,18 @@ const makeStyles = (c: Colors) =>
     slider: { alignSelf: 'stretch' },
     range: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
     rangeText: { fontFamily: fonts.regular, fontSize: 13, color: c.textSecondary },
+    priceLabel: { fontFamily: fonts.semibold, fontSize: 15, color: c.text, marginTop: 16 },
+    priceInput: {
+      fontFamily: fonts.regular,
+      fontSize: 17,
+      color: c.text,
+      borderColor: c.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      marginTop: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
     buttons: { flexDirection: 'row', gap: 12, marginTop: 20 },
     button: {
       flex: 1,

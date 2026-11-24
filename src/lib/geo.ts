@@ -1,5 +1,5 @@
 export type Pt = { lat: number; lng: number };
-export type Zone = "in_range" | "needs_approval" | "out";
+export type Zone = "in_range" | "out";
 
 const EARTH_KM = 6371;
 
@@ -28,23 +28,18 @@ export function nearestOnRoute(point: Pt, route: Pt[]) {
   return best;
 }
 
-// in_range: within the driver's MDD. needs_approval: within MDD + the driver's extra limit.
+// Both stops must be within the driver's maximum divergence and in route order.
 export function classifyTrip(
   route: Pt[],
   pickup: Pt,
   dropoff: Pt,
   mdd: number,
-  maxExtra: number,
 ) {
   const p = nearestOnRoute(pickup, route);
   const d = nearestOnRoute(dropoff, route);
   const worst = Math.max(p.dist, d.dist);
 
-  let zone: Zone = "out";
-  if (p.position < d.position) {
-    if (worst <= mdd) zone = "in_range";
-    else if (worst <= mdd + maxExtra) zone = "needs_approval";
-  }
+  const zone: Zone = p.position < d.position && worst <= mdd ? "in_range" : "out";
   return { zone, pickupKm: p.dist, dropoffKm: d.dist };
 }
 
