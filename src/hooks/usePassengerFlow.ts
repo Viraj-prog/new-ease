@@ -8,7 +8,6 @@ import {
   sendRequest,
   type Result,
 } from '@/lib/rides';
-import { recordRequestDetails } from '@/lib/previousTrips';
 import { getRoute } from '@/lib/routing';
 import { useEffect, useRef, useState } from 'react';
 
@@ -32,6 +31,7 @@ export function usePassengerFlow(userId: string | undefined, onAccepted?: (drive
 
   // Who the request went to, and what to do when they accept (kept in refs so the timer sees the latest).
   const sentName = useRef('');
+  const sending = useRef(false);
   const acceptedRef = useRef(onAccepted);
   useEffect(() => {
     acceptedRef.current = onAccepted;
@@ -86,7 +86,7 @@ export function usePassengerFlow(userId: string | undefined, onAccepted?: (drive
     when: Date,
     // The places a route preview already found. Passing them skips looking them up again,
     // which for a blank start would ask the phone for its location a second time.
-    known?: { from: Pt; to: Pt },
+    known?: { from: Pt; to: Pt; distanceKm: number; durationMin: number },
   ): Promise<'found' | 'none' | 'error'> {
     if (!userId) return 'error';
     clear();
@@ -102,12 +102,20 @@ export function usePassengerFlow(userId: string | undefined, onAccepted?: (drive
         setMsg('Could not find your starting point. Try adding the city, or allow location.');
         return 'error';
       }
+      const direct = known ?? await getRoute([from, to]);
+      if (!direct) {
+        setMsg('No road route found between those places.');
+        return 'error';
+      }
       setPickup(from);
       setDropoff(to);
 
-      setRequestId(await saveRequest({ passengerId: userId, from, to, when, requestId }));
+      setRequestId(await saveRequest({
+        passengerId: userId, from, to, when, requestId,
+        directKm: direct.distanceKm, directMin: direct.durationMin, dropoffText: toText,
+      }));
 
-      const list = await searchRides(from, to, when, userId);
+      const list = await searchRides(from, to, when, userId, direct.distanceKm);
       setResults(list);
       return list.length > 0 ? 'found' : 'none';
     } catch (e) {
@@ -138,14 +146,12 @@ export function usePassengerFlow(userId: string | undefined, onAccepted?: (drive
     setExtra(null);
   }
 
-  // `price` and `dropoffText` (where the rider is going) are saved on the request, for Previous
-  // Trips and Recent trips.
-  async function request(r: Result, price?: number, dropoffText?: string) {
-    if (!requestId) return;
+  async function request(r: Result) {
+    if (!requestId || sending.current || status === 'pending') return;
+    sending.current = true;
     try {
       await sendRequest(requestId, r);
       sentName.current = r.driverName;
-      recordRequestDetails(requestId, { price, dropoffText });
       setSentTo(r.rideId);
       setStatus('pending');
       setMsg('');
@@ -160,6 +166,8 @@ export function usePassengerFlow(userId: string | undefined, onAccepted?: (drive
       } else {
         setMsg(`Could not send the request. ${m}`);
       }
+    } finally {
+      sending.current = false;
     }
   }
 

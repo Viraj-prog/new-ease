@@ -1,5 +1,5 @@
 import VehicleBox from '@/components/VehicleBox';
-import { driverExtras } from '@/lib/driverExtras';
+import { driverExtras, formatDriverDeparture, formatDriverFare } from '@/lib/driverExtras';
 import type { Result } from '@/lib/rides';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
@@ -12,7 +12,6 @@ import PressButton from '@/components/PressButton';
 type Props = {
   driver: Result;
   avatarIndex: number;
-  priceText: string;
   // True when other drivers exist; otherwise the left button is "Cancel".
   hasOthers: boolean;
   onSeeOthers: () => void;
@@ -43,7 +42,7 @@ export default function DriverMatchCard(p: Props) {
           <Ionicons name='checkmark' size={18} color={colors.onTint} />
           <Text style={styles.badgeText}>Best match</Text>
         </View>
-        <Text style={styles.away}>{x.minAway} min away</Text>
+        <Text style={styles.away}>Departs {formatDriverDeparture(p.driver.departAt)}</Text>
       </View>
 
       <View style={styles.person}>
@@ -62,8 +61,8 @@ export default function DriverMatchCard(p: Props) {
           </View>
         </View>
         <View style={styles.priceCol}>
-          <Text style={styles.price}>{p.priceText}</Text>
-          <Text style={styles.fare}>Est. fare</Text>
+          <Text style={p.driver.fare === null ? styles.fare : styles.price}>{formatDriverFare(p.driver.fare)}</Text>
+          {p.driver.fare !== null && <Text style={styles.fare}>Est. fare</Text>}
         </View>
       </View>
 

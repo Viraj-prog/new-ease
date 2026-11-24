@@ -42,21 +42,10 @@ export function driverExtras(r: Result): DriverExtras {
   };
 }
 
-// The first driver offered: best rating, then lowest price. Drivers with no rating rank last.
-// On a full tie the earliest in the list wins.
-export function pickBest(drivers: Result[], priceOf: (r: Result) => number = () => 0): Result | null {
-  let best: Result | null = null;
-  for (const d of drivers) {
-    if (!best) {
-      best = d;
-      continue;
-    }
-    const a = d.rating ?? -1;
-    const b = best.rating ?? -1;
-    if (a > b || (a === b && priceOf(d) < priceOf(best))) best = d;
-  }
-  return best;
-}
+export const formatDriverFare = (fare: Result['fare']) => fare === null ? 'Fare unavailable' : `$${fare.toFixed(2)}`;
+
+export const formatDriverDeparture = (departAt: Result['departAt']) =>
+  new Date(departAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
 // The designs colour the avatars in a fixed order (gold, blue, green, purple, red).
 const SLOTS = [2, 4, 1, 0, 3];

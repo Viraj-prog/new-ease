@@ -2,7 +2,7 @@ import BackButton from '@/components/BackButton';
 import Icon from '@/components/Icon';
 import MapTitleChip from '@/components/MapTitleChip';
 import VehicleBox from '@/components/VehicleBox';
-import { avatarSlot, driverExtras } from '@/lib/driverExtras';
+import { avatarSlot, driverExtras, formatDriverDeparture, formatDriverFare } from '@/lib/driverExtras';
 import type { Result } from '@/lib/rides';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
@@ -16,8 +16,6 @@ type Props = {
   // The driver the rider has tapped, if any; this shows the Confirm button.
   chosenId: string | null;
   onChoose: (rideId: string) => void;
-  // What the ride costs, such as "$15.50". It is the same for every driver.
-  priceText: string;
   onBack: () => void;
   onConfirm: () => void;
 };
@@ -32,7 +30,7 @@ const initialsOf = (name: string) =>
     .toUpperCase() || '?';
 
 // Full-screen "Available drivers" list. Tapping a card selects it; Confirm sends the request.
-export default function DriverList({ drivers, chosenId, onChoose, priceText, onBack, onConfirm }: Props) {
+export default function DriverList({ drivers, chosenId, onChoose, onBack, onConfirm }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = makeStyles(colors);
@@ -81,8 +79,9 @@ export default function DriverList({ drivers, chosenId, onChoose, priceText, onB
                         {chosen ? ` · ${x.minAway} min away` : ''}
                       </Text>
                     </View>
+                    <Text style={styles.rating}>Departs {formatDriverDeparture(d.departAt)}</Text>
                   </View>
-                  <Text style={styles.price}>{priceText}</Text>
+                  <Text style={d.fare === null ? styles.rating : styles.price}>{formatDriverFare(d.fare)}</Text>
                 </View>
                 {chosen && <VehicleBox model={x.model} detail={x.detail} plate={x.plate} />}
               </Pressable>

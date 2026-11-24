@@ -32,6 +32,8 @@ type RideRow = {
   endLat: number;
   endLng: number;
   tripMdd: number | null;
+  departAt: string;
+  pricePerKm: number | null;
   route: { points: Pt[]; distanceKm: number; durationMin: number } | null;
   drivers: {
     driverRating: number | null;
@@ -45,6 +47,8 @@ export type Result = {
   rideId: string;
   driverName: string;
   rating: number | null;
+  departAt: string;
+  fare: number | null;
   pickupKm: number;
   dropoffKm: number;
   tripKm: number;
@@ -214,6 +218,9 @@ export async function saveRequest(args: {
   to: Pt;
   when: Date;
   requestId: string | null;
+  directKm: number;
+  directMin: number;
+  dropoffText: string;
 }): Promise<string> {
   const row = {
     passengerId: args.passengerId,
@@ -222,32 +229,45 @@ export async function saveRequest(args: {
     dropoffLat: args.to.lat,
     dropoffLng: args.to.lng,
     departAt: args.when.toISOString(),
+    directKm: args.directKm,
+    directMin: args.directMin,
+    dropoffText: args.dropoffText.trim() || null,
+    price: null,
     selectedRideId: null,
     status: 'open',
     needsApproval: false,
   };
   if (args.requestId) {
-    const { error } = await supabase.from('ride_requests').update(row).eq('id', args.requestId);
+    const { data, error } = await supabase.from('ride_requests').update(row)
+      .eq('id', args.requestId)
+      .eq('passengerId', args.passengerId)
+      .eq('status', 'open')
+      .select('id')
+      .maybeSingle();
     if (error) throw error;
-    return args.requestId;
+    if (data) return data.id;
   }
   const { data, error } = await supabase.from('ride_requests').insert(row).select('id').single();
   if (error) throw error;
   return data.id;
 }
 
-// Passenger: open trips that day, ranked by how close they pass. The user's own trips are left out.
-export async function searchRides(from: Pt, to: Pt, when: Date, userId: string): Promise<Result[]> {
+// Passenger: scheduled rides on the same local day, closest departure first.
+export async function searchRides(
+  from: Pt, to: Pt, when: Date, userId: string, directKm: number,
+): Promise<Result[]> {
   const { from: a, to: b } = dayRange(when);
+  const requestedTime = when.getTime();
   const { data, error } = await supabase
     .from('rides')
     .select(
-      `rideId, driverId, startLat, startLng, endLat, endLng, tripMdd, route,
+      `rideId, driverId, startLat, startLng, endLat, endLng, tripMdd, route, departAt, pricePerKm,
        drivers ( driverRating, mdd, users ( firstName, lastName ) )`,
     )
     .neq('driverId', userId)
     .gte('departAt', a)
     .lte('departAt', b)
+    .eq('status', 'scheduled')
     .eq('isCompleted', false)
     .eq('occupied', false);
   if (error) throw error;
@@ -264,6 +284,8 @@ export async function searchRides(from: Pt, to: Pt, when: Date, userId: string):
       rideId: r.rideId,
       driverName: name || 'Driver',
       rating: r.drivers?.driverRating ?? null,
+      departAt: r.departAt,
+      fare: r.pricePerKm == null ? null : directKm * r.pricePerKm,
       pickupKm: c.pickupKm,
       dropoffKm: c.dropoffKm,
       tripKm: r.route.distanceKm,
@@ -273,8 +295,34 @@ export async function searchRides(from: Pt, to: Pt, when: Date, userId: string):
       end: { lat: r.endLat, lng: r.endLng },
     });
   }
-  list.sort((x, y) => x.pickupKm + x.dropoffKm - (y.pickupKm + y.dropoffKm));
-  return list;
+  const byTime = new Map<number, Result[]>();
+  for (const ride of list) {
+    const difference = Math.abs(Date.parse(ride.departAt) - requestedTime);
+    const group = byTime.get(difference);
+    if (group) group.push(ride);
+    else byTime.set(difference, [ride]);
+  }
+
+  const ranked: Result[] = [];
+  for (const [, group] of [...byTime].sort(([a], [b]) => a - b)) {
+    if (group.length > 1) {
+      const detours = new Map<string, number>();
+      for (const ride of group) {
+        try {
+          const route = await getRoute([ride.start, from, to, ride.end]);
+          if (route) detours.set(ride.rideId, Math.max(0, route.distanceKm - ride.tripKm));
+        } catch (error) {
+          console.warn('Could not calculate a detour for tied rides', error);
+        }
+      }
+      const detour = (ride: Result) => detours.size === group.length
+        ? detours.get(ride.rideId)!
+        : ride.pickupKm + ride.dropoffKm;
+      group.sort((a, b) => detour(a) - detour(b) || a.rideId.localeCompare(b.rideId));
+    }
+    ranked.push(...group);
+  }
+  return ranked;
 }
 
 // Passenger: where their request stands (open, pending, accepted, declined).
@@ -303,15 +351,19 @@ export async function cancelRequest(requestId: string): Promise<boolean> {
 
 // Passenger: ask this driver to take them.
 export async function sendRequest(requestId: string, r: Result) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('ride_requests')
     .update({
       selectedRideId: r.rideId,
       status: 'pending',
       needsApproval: false,
     })
-    .eq('id', requestId);
+    .eq('id', requestId)
+    .eq('status', 'open')
+    .select('id')
+    .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error('This request has already been sent. Search again to start another request.');
 }
 
 // ---- Rides tab ----

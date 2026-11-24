@@ -4,7 +4,7 @@ import DivergenceModal from '@/components/DivergenceModal';
 import DriverList from '@/components/DriverList';
 import DriverMatchCard from '@/components/DriverMatchCard';
 import LoadingPopup from '@/components/LoadingPopup';
-import { avatarSlot, pickBest } from '@/lib/driverExtras';
+import { avatarSlot } from '@/lib/driverExtras';
 import HomeSheetContent from '@/components/HomeSheetContent';
 import InteractiveMap, { type MapMarker } from '@/components/map';
 import MapTitleChip from '@/components/MapTitleChip';
@@ -17,7 +17,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import TripNavigation from '@/components/TripNavigation';
 import TripSheet, { tripTitle } from '@/components/TripSheet';
 import { useDriverFlow } from '@/hooks/useDriverFlow';
-import { haversineKm, PRICE_PER_KM } from '@/lib/previousTrips';
+import { haversineKm } from '@/lib/previousTrips';
 import { useSavedTrips } from '@/hooks/useSavedTrips';
 import { usePassengerFlow } from '@/hooks/usePassengerFlow';
 import { useRoleSwitch } from '@/hooks/useRoleSwitch';
@@ -202,7 +202,7 @@ export default function HomeScreen() {
     setChosenId(null);
     setListOpen(false);
     // Reuse the start and end the route preview already found.
-    const known = preview ? { from: preview.start, to: preview.end } : undefined;
+    const known = preview ? { ...preview, from: preview.start, to: preview.end } : undefined;
     const found = await passenger.search(pickup, destination, when ?? new Date(), known);
     if (found === 'none') {
       notify({ kind: 'alert', title: "No Driver's available.", subtitle: 'Try again Later.' });
@@ -363,12 +363,10 @@ export default function HomeScreen() {
   const showResults = hasResults && listOpen;
   // The best match is shown over the preview; "See others" opens the full list.
   const showMatch = hasResults && !listOpen;
-  const best = pickBest(passenger.results, () => (preview ? preview.distanceKm * PRICE_PER_KM : 0));
+  const best = passenger.results[0];
   const previewNow = preview && preview.driver === driverMode && !driver.trip && !showResults ? preview : null;
   const showTrip = !!driver.trip;
   const showPreview = !!previewNow;
-  const ridePrice = preview ? preview.distanceKm * PRICE_PER_KM : undefined;
-  const priceText = preview ? `$${(preview.distanceKm * PRICE_PER_KM).toFixed(2)}` : '';
 
   // A posted trip, a route preview or a set of results always shows the plan view.
   const showPlan = view === 'plan' || active || showPreview;
@@ -382,13 +380,13 @@ export default function HomeScreen() {
 
   // Confirm on the best match card.
   function confirmBest() {
-    if (best) passenger.request(best, ridePrice, destination);
+    if (best) passenger.request(best);
   }
 
   // Confirm on the driver list: ask the chosen driver. The "Confirming Ride" popup takes over.
   function confirmDriver() {
     const r = passenger.results.find((x) => x.rideId === chosenId);
-    if (r) passenger.request(r, ridePrice, destination);
+    if (r) passenger.request(r);
   }
 
   // Closing the "Ride Accepted" notice ends the booking flow and goes home.
@@ -490,7 +488,6 @@ export default function HomeScreen() {
           drivers={passenger.results}
           chosenId={chosenId}
           onChoose={setChosenId}
-          priceText={priceText}
           onBack={() => {
             setChosenId(null);
             setListOpen(false);
@@ -629,7 +626,6 @@ export default function HomeScreen() {
               <DriverMatchCard
                 driver={best}
                 avatarIndex={avatarSlot(Math.max(0, passenger.results.indexOf(best)))}
-                priceText={priceText}
                 hasOthers={passenger.results.length > 1}
                 onSeeOthers={() => setListOpen(true)}
                 onCancel={backToPreview}
