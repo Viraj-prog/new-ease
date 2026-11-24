@@ -10,7 +10,7 @@ import InteractiveMap, { type MapMarker } from '@/components/map';
 import MapTitleChip from '@/components/MapTitleChip';
 import MenuButton from '@/components/MenuButton';
 import PlanForm from '@/components/PlanForm';
-import RoutePreview from '@/components/RoutePreview';
+import RoutePreview, { PlannedRouteSummary } from '@/components/RoutePreview';
 import SearchPill from '@/components/SearchPill';
 import ThemeToggle from '@/components/ThemeToggle';
 import TripNavigation from '@/components/TripNavigation';
@@ -25,7 +25,7 @@ import { useAuth } from '@/lib/auth';
 import type { Pt } from '@/lib/geo';
 import { pickDate, pickDateTime, pickTime } from '@/lib/pickDateTime';
 import { CURRENT_LABEL, errText, isCurrentLabel, resolveDestination, resolveStart } from '@/lib/places';
-import { cancelPostedRide, loadPostedRides } from '@/lib/rides';
+import { cancelPostedRide, loadPostedRides, type Req } from '@/lib/rides';
 import { getRoute } from '@/lib/routing';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
@@ -517,11 +517,9 @@ export default function HomeScreen() {
     navigating, showMatch, showPlan, showPreview, showResults, showTrip]));
 
   // Driver answered a request. After accepting, look up who is booked.
-  async function answer(accept: boolean) {
-    const req = driver.popup;
+  async function answer(accept: boolean, req: Req | null = driver.popup) {
     if (!req) return;
-    await driver.respond(req, accept);
-    if (accept) refreshBooked();
+    if (await driver.respond(req, accept) && accept) refreshBooked();
   }
 
   // "Yes" on the cancel confirmation: remove the trip from rider search.
@@ -556,7 +554,9 @@ export default function HomeScreen() {
   }
 
   // What the map draws: the posted trip, or the driver being looked at.
-  const route = previewNow?.route ?? driver.trip?.route ?? [];
+  const visiblePlan = showTrip ? driver.trip?.plan : null;
+  const retryPassenger = driver.acceptError?.retry;
+  const route = previewNow?.route ?? visiblePlan?.points ?? driver.trip?.route ?? [];
   const markers: MapMarker[] = showTrip
     ? driver.markers.map((m) => ({ ...m, color: colors.pickup }))
     : previewNow
@@ -576,6 +576,7 @@ export default function HomeScreen() {
       <InteractiveMap
         route={route}
         markers={markers}
+        plannedStops={visiblePlan?.stops}
         // Fit the route into the map area left visible above the sheet.
         padding={{
           top: insets.top + 90,
@@ -588,8 +589,8 @@ export default function HomeScreen() {
       {navigating ? (
         <TripNavigation
           destination={destination}
-          distanceKm={driver.trip?.distanceKm ?? 0}
-          durationMin={driver.trip?.durationMin ?? 0}
+          distanceKm={visiblePlan?.distanceKm ?? driver.trip?.distanceKm ?? 0}
+          durationMin={visiblePlan?.durationMin ?? driver.trip?.durationMin ?? 0}
           onEnd={endTrip}
         />
       ) : showResults ? (
@@ -648,24 +649,36 @@ export default function HomeScreen() {
                   onUnsetSaved={onUnsetSaved}
                 />
               ) : showTrip && driver.trip ? (
-                <TripSheet
-                  startText={pickup}
-                  endText={destination}
-                  mddKm={driver.trip.mdd}
-                  request={driver.popup}
-                  booked={bookedNow}
-                  message={message}
-                  onAccept={() => answer(true)}
-                  onDecline={() => answer(false)}
-                  onNotNow={driver.closePopup}
-                  onStart={() => setNavigating(true)}
-                  onCancel={() => setConfirmCancel(true)}
-                  onScheduleAnother={() => {
-                    clearFields();
-                    setWhen(null);
-                    openPlan();
-                  }}
-                />
+                <>
+                  {visiblePlan && <PlannedRouteSummary plan={visiblePlan} />}
+                  {driver.acceptError && (
+                    <InlineNotice
+                      message={driver.acceptError.message}
+                      onRetry={retryPassenger && !driver.responding
+                        ? () => void answer(true, retryPassenger)
+                        : undefined}
+                    />
+                  )}
+                  <TripSheet
+                    startText={pickup}
+                    endText={destination}
+                    mddKm={driver.trip.mdd}
+                    request={driver.popup}
+                    booked={bookedNow}
+                    message={message}
+                    responding={driver.responding}
+                    onAccept={() => answer(true)}
+                    onDecline={() => answer(false)}
+                    onNotNow={driver.closePopup}
+                    onStart={() => setNavigating(true)}
+                    onCancel={() => setConfirmCancel(true)}
+                    onScheduleAnother={() => {
+                      clearFields();
+                      setWhen(null);
+                      openPlan();
+                    }}
+                  />
+                </>
               ) : previewNow ? (
                 <RoutePreview
                   startText={pickup}

@@ -1,11 +1,13 @@
 import BackButton from '@/components/BackButton';
 import InlineNotice from '@/components/InlineNotice';
 import PressButton from '@/components/PressButton';
+import InteractiveMap from '@/components/map';
+import { PlannedRouteSummary } from '@/components/RoutePreview';
 import { useAuth } from '@/lib/auth';
 import { formatDriverFare } from '@/lib/driverExtras';
 import { useNotify } from '@/lib/notify';
 import { errText } from '@/lib/places';
-import { answerRequest, loadDriverTrip, loadRequests, type Req } from '@/lib/rides';
+import { acceptPlannedRequest, declineRequest, loadDriverTrip, loadRequests, type Req, type RidePlan } from '@/lib/rides';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
@@ -25,6 +27,8 @@ export default function RideRequestsScreen() {
   const insets = useSafeAreaInsets();
   const notify = useNotify();
   const [requests, setRequests] = useState<Req[]>([]);
+  const [plan, setPlan] = useState<RidePlan | null>(null);
+  const [decisionError, setDecisionError] = useState<{ message: string; retry?: Req } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -49,6 +53,7 @@ export default function RideRequestsScreen() {
       if (!trip || !userId) throw new Error('This scheduled ride is no longer available.');
       const rows = await loadRequests(trip, userId);
       if (revision !== loadRevision.current) return;
+      setPlan(trip.plan);
       setRequests(rows);
       setError('');
     } catch (e) {
@@ -69,18 +74,28 @@ export default function RideRequestsScreen() {
   }, [reload]));
 
   const respond = useCallback(async (request: Req, accept: boolean) => {
-    if (!rideId || busy) return;
+    if (!rideId || !userId || busy) return;
     setBusy(true);
+    setDecisionError(null);
     try {
-      await answerRequest(rideId, request.id, accept);
+      if (accept) {
+        const result = await acceptPlannedRequest(userId, rideId, request.id);
+        if (result.kind !== 'accepted') {
+          setDecisionError({ message: result.message, retry: result.kind === 'retry' ? request : undefined });
+          return;
+        }
+        setPlan(result.trip.plan);
+      } else {
+        await declineRequest(rideId, request.id);
+      }
       notify({ kind: 'success', title: accept ? 'Passenger accepted' : 'Request declined' });
     } catch (e) {
-      notify({ kind: 'alert', title: 'Could not update request', subtitle: errText(e) });
+      setDecisionError({ message: errText(e) });
     } finally {
       await reload();
       setBusy(false);
     }
-  }, [busy, notify, reload, rideId]);
+  }, [busy, notify, reload, rideId, userId]);
 
   async function refresh() {
     setRefreshing(true);
@@ -93,6 +108,7 @@ export default function RideRequestsScreen() {
     { label: 'Nearby riders', status: 'open', empty: 'No nearby riders are searching.' },
     { label: 'Accepted passengers', status: 'accepted', empty: 'No passengers accepted yet.' },
   ];
+  const retryPassenger = decisionError?.retry;
 
   return (
     <View style={styles.screen}>
@@ -103,35 +119,59 @@ export default function RideRequestsScreen() {
         <Text style={styles.title}>Ride requests</Text>
         {loading && <ActivityIndicator color={colors.brand} />}
         {!!error && <InlineNotice message={error} />}
+        {decisionError && (
+          <InlineNotice
+            message={decisionError.message}
+            onRetry={retryPassenger && !busy ? () => void respond(retryPassenger, true) : undefined}
+          />
+        )}
+        {plan && (
+          <View>
+            <View style={styles.map}>
+              <InteractiveMap
+                route={plan.points}
+                plannedStops={plan.stops}
+                padding={{ top: 28, right: 28, bottom: 28, left: 28 }}
+              />
+            </View>
+            <PlannedRouteSummary plan={plan} />
+          </View>
+        )}
         {!loading && !error && groups.map((group) => {
           const rows = requests.filter((request) => request.status === group.status);
           return (
             <View style={styles.group} key={group.status}>
               <Text style={styles.heading}>{group.label}</Text>
               {!rows.length && <Text style={styles.detail}>{group.empty}</Text>}
-              {rows.map((request) => (
-                <View style={styles.card} key={request.id}>
-                  <View style={styles.row}>
-                    <Text style={styles.name}>{request.passengerName ?? 'A passenger'}</Text>
-                    <Text style={styles.detail}>{formatDriverFare(request.fare)}</Text>
-                  </View>
-                  <Text style={styles.detail}>
-                    Pickup {request.pickupKm.toFixed(1)} km away · Drop-off {request.dropoffKm.toFixed(1)} km away
-                  </Text>
-                  {request.status !== 'accepted' && (
+              {rows.map((request) => {
+                const pickup = plan?.stops.findIndex((stop) => stop.requestId === request.id && stop.type === 'pickup') ?? -1;
+                const dropoff = plan?.stops.findIndex((stop) => stop.requestId === request.id && stop.type === 'dropoff') ?? -1;
+                return (
+                  <View style={styles.card} key={request.id}>
                     <View style={styles.row}>
-                      {request.status === 'pending' && (
-                        <PressButton ghost disabled={busy} style={styles.button} onPress={() => respond(request, false)}>
-                          <Text style={styles.decline}>Decline</Text>
-                        </PressButton>
-                      )}
-                      <PressButton disabled={busy} style={[styles.button, styles.accept]} onPress={() => respond(request, true)}>
-                        <Text style={styles.acceptText}>Accept</Text>
-                      </PressButton>
+                      <Text style={styles.name}>{request.passengerName ?? 'A passenger'}</Text>
+                      <Text style={styles.detail}>{formatDriverFare(request.fare)}</Text>
                     </View>
-                  )}
-                </View>
-              ))}
+                    <Text style={styles.detail}>
+                      {request.status === 'accepted' && pickup >= 0 && dropoff >= 0
+                        ? `Pickup ${pickup + 1} · Drop-off ${dropoff + 1}`
+                        : `Pickup ${request.pickupKm.toFixed(1)} km away · Drop-off ${request.dropoffKm.toFixed(1)} km away`}
+                    </Text>
+                    {request.status !== 'accepted' && (
+                      <View style={styles.row}>
+                        {request.status === 'pending' && (
+                          <PressButton ghost disabled={busy} style={styles.button} onPress={() => respond(request, false)}>
+                            <Text style={styles.decline}>Decline</Text>
+                          </PressButton>
+                        )}
+                        <PressButton disabled={busy} style={[styles.button, styles.accept]} onPress={() => respond(request, true)}>
+                          <Text style={styles.acceptText}>{busy ? 'Working…' : 'Accept'}</Text>
+                        </PressButton>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
             </View>
           );
         })}
@@ -145,6 +185,7 @@ const makeStyles = (c: Colors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: c.background },
   content: { paddingHorizontal: 20, gap: 18 },
   title: { fontFamily: fonts.titleSemibold, fontSize: 30, color: c.text },
+  map: { height: 240, borderRadius: 18, overflow: 'hidden' },
   group: { gap: 10 },
   heading: { fontFamily: fonts.semibold, fontSize: 18, color: c.text },
   card: { gap: 10, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: c.border, backgroundColor: c.card },

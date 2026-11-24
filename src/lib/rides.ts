@@ -1,8 +1,17 @@
 import { classifyTrip, dayRange, localDate, type Pt } from './geo';
+import { getDrivingTimeMatrix } from './osrmTable';
+import { pickupPlanPoints, planPickupOrder, type PickupPassenger, type PickupStop } from './pickupPlanner';
 import { getRoute } from './routing';
 import { supabase } from './supabase';
 
 export type RideStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+export type RidePlan = {
+  stops: PickupStop[];
+  points: Pt[];
+  distanceKm: number;
+  durationMin: number;
+  passengerIds: string[];
+};
 const activeRideStatuses: RideStatus[] = ['scheduled', 'in_progress'];
 const uuidPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 
@@ -17,7 +26,10 @@ export function isActiveRide(status: RideStatus) {
 // A trip a driver has posted, with the road route drawn for it.
 export type Trip = {
   rideId: string;
+  start: Pt;
+  destination: Pt;
   route: Pt[];
+  plan: RidePlan | null;
   distanceKm: number;
   durationMin: number;
   mdd: number;
@@ -112,7 +124,10 @@ export async function postTrip(args: {
 
   return {
     rideId: data.rideId,
+    start: args.start,
+    destination: args.end,
     route: r.points,
+    plan: null,
     distanceKm: r.distanceKm,
     durationMin: r.durationMin,
     mdd: args.mdd,
@@ -121,24 +136,14 @@ export async function postTrip(args: {
   };
 }
 
-// Driver: is this trip still unfinished? False once it was finished or cancelled anywhere.
-export async function isTripActive(rideId: string): Promise<boolean> {
-  if (!isUuid(rideId)) return false;
-  const { data, error } = await supabase
-    .from('rides')
-    .select('status')
-    .eq('rideId', rideId)
-    .maybeSingle();
-  if (error) throw error;
-  return !!data && isActiveRide(data.status);
-}
+const tripFields = 'rideId, route, tripMdd, departAt, pricePerKm, startLat, startLng, endLat, endLng, plan';
 
 // Driver: their earliest unfinished trip, so it can be shown again after a restart.
 export async function loadActiveTrip(driverId: string): Promise<Trip | null> {
   if (!isUuid(driverId)) return null;
   const { data, error } = await supabase
     .from('rides')
-    .select('rideId, route, tripMdd, departAt, pricePerKm')
+    .select(tripFields)
     .eq('driverId', driverId)
     .in('status', activeRideStatuses)
     .order('departAt', { ascending: true })
@@ -151,7 +156,7 @@ export async function loadActiveTrip(driverId: string): Promise<Trip | null> {
 export async function loadDriverTrip(rideId: string, driverId: string): Promise<Trip | null> {
   if (!isUuid(rideId) || !isUuid(driverId)) return null;
   const { data, error } = await supabase.from('rides')
-    .select('rideId, route, tripMdd, departAt, pricePerKm')
+    .select(tripFields)
     .eq('rideId', rideId)
     .eq('driverId', driverId)
     .in('status', activeRideStatuses)
@@ -166,11 +171,21 @@ function asTrip(data: {
   tripMdd: number | null;
   departAt: string | null;
   pricePerKm: number | null;
+  startLat: number | null;
+  startLng: number | null;
+  endLat: number | null;
+  endLng: number | null;
+  plan: RidePlan | null;
 } | null): Trip | null {
   if (!isUuid(data?.rideId) || !data.route?.points?.length) return null;
   return {
     rideId: data.rideId,
+    start: data.startLat == null || data.startLng == null
+      ? data.route.points[0] : { lat: data.startLat, lng: data.startLng },
+    destination: data.endLat == null || data.endLng == null
+      ? data.route.points[data.route.points.length - 1] : { lat: data.endLat, lng: data.endLng },
     route: data.route.points,
+    plan: data.plan?.points?.length && Array.isArray(data.plan.stops) ? data.plan : null,
     distanceKm: data.route.distanceKm,
     durationMin: data.route.durationMin,
     mdd: data.tripMdd ?? 2,
@@ -251,17 +266,164 @@ export async function loadRequests(trip: Trip, driverId: string): Promise<Req[]>
   return found;
 }
 
-// The database awards the passenger to the first driver who accepts.
-export async function answerRequest(rideId: string, requestId: string, accept: boolean) {
-  if (accept) {
-    const { error } = await supabase.rpc('accept_request', {
-      request_id: requestId, ride_id: rideId, new_plan: null,
-    });
-    if (error) throw error;
-    return;
-  }
+export async function declineRequest(rideId: string, requestId: string) {
   const { error } = await supabase.rpc('decline_offer', { request_id: requestId, ride_id: rideId });
   if (error) throw error;
+}
+
+const planningFields = 'id, passengerId, pickupLat, pickupLng, dropoffLat, dropoffLng, directMin, status';
+type PlanningRequest = {
+  id: string;
+  passengerId: string;
+  pickupLat: number;
+  pickupLng: number;
+  dropoffLat: number;
+  dropoffLng: number;
+  directMin: number | null;
+  status: string | null;
+};
+type PlannedAcceptance =
+  | { kind: 'accepted'; trip: Trip }
+  | { kind: 'blocked' | 'retry'; message: string };
+
+const acceptingRides = new Set<string>();
+const tooLong = 'Accepting this passenger would make another passenger’s ride too long.';
+
+function loadPlanningRequest(requestId: string) {
+  return supabase.from('ride_requests').select(planningFields).eq('id', requestId).maybeSingle();
+}
+
+async function loadAcceptedPlanningRequests(rideId: string) {
+  const { data, error } = await supabase.from('ride_offers')
+    .select(`ride_requests!inner(${planningFields})`)
+    .eq('rideId', rideId)
+    .eq('status', 'accepted')
+    .order('requestId');
+  if (error) throw error;
+  return ((data ?? []) as unknown as { ride_requests: PlanningRequest }[]).map((offer) => offer.ride_requests);
+}
+
+// Road planning completes before the single atomic booking-and-plan RPC.
+export async function acceptPlannedRequest(
+  driverId: string, rideId: string, requestId: string,
+): Promise<PlannedAcceptance> {
+  if (![driverId, rideId, requestId].every(isUuid)) {
+    return { kind: 'blocked', message: 'This ride or passenger request is no longer available.' };
+  }
+  if (acceptingRides.has(rideId)) {
+    return { kind: 'blocked', message: 'An acceptance is already in progress for this ride.' };
+  }
+  acceptingRides.add(rideId);
+  try {
+    const [trip, accepted, candidate] = await Promise.all([
+      loadDriverTrip(rideId, driverId),
+      loadAcceptedPlanningRequests(rideId),
+      loadPlanningRequest(requestId),
+    ]);
+    if (candidate.error) throw candidate.error;
+    if (!trip || !candidate.data) {
+      return { kind: 'blocked', message: 'This ride or passenger request is no longer available.' };
+    }
+    if (accepted.some(({ id }) => id === requestId)) return { kind: 'accepted', trip };
+    if (candidate.data.status === 'accepted') {
+      return { kind: 'blocked', message: 'Another driver already accepted this request.' };
+    }
+    if (candidate.data.status !== 'open' && candidate.data.status !== 'pending') {
+      return { kind: 'blocked', message: 'This request is no longer open.' };
+    }
+
+    const requests: PlanningRequest[] = [...accepted, candidate.data];
+    if (requests.some((r) => ![r.pickupLat, r.pickupLng, r.dropoffLat, r.dropoffLng].every(Number.isFinite))) {
+      return { kind: 'blocked', message: 'A passenger is missing a pickup or drop-off location.' };
+    }
+    const passengers: PickupPassenger[] = requests.map((r) => ({
+      requestId: r.id,
+      pickup: { lat: r.pickupLat, lng: r.pickupLng },
+      dropoff: { lat: r.dropoffLat, lng: r.dropoffLng },
+      directMin: r.directMin ?? 0,
+    }));
+    const newPassenger = passengers[passengers.length - 1];
+    if (classifyTrip(trip.route, newPassenger.pickup, newPassenger.dropoff, trip.mdd).zone === 'out') {
+      return { kind: 'blocked', message: 'This passenger’s stops are outside your route limits.' };
+    }
+    const matrix = await getDrivingTimeMatrix(pickupPlanPoints(trip.start, trip.destination, passengers));
+    if (matrix.kind === 'error') return { kind: 'retry', message: matrix.message };
+
+    // Legacy bookings can lack a stored direct duration. Use their direct table leg.
+    for (const [i, passenger] of passengers.entries()) {
+      if (requests[i].directMin !== null) continue;
+      const direct = matrix.times[2 * i + 1][2 * i + 2];
+      if (direct === null) return { kind: 'blocked', message: 'A passenger’s direct trip could not be routed.' };
+      passenger.directMin = direct;
+    }
+    const order = planPickupOrder(trip.start, trip.destination, passengers, matrix.times);
+    if (order.kind === 'unavailable') return { kind: 'blocked', message: tooLong };
+    if (order.kind === 'error') return { kind: 'blocked', message: order.message };
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    let route;
+    try {
+      route = await getRoute([trip.start, ...order.stops, trip.destination], controller.signal);
+    } catch {
+      return {
+        kind: 'retry',
+        message: controller.signal.aborted
+          ? 'The routing service timed out. Retry to accept this passenger.'
+          : 'Could not load the planned route. Retry to accept this passenger.',
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!route || route.points.length < 2 || route.legDurationsMin.length !== order.stops.length + 1 ||
+        ![route.distanceKm, route.durationMin, ...route.legDurationsMin].every((n) => Number.isFinite(n) && n >= 0)) {
+      return { kind: 'retry', message: 'The routing service did not return a complete route. Try again.' };
+    }
+
+    // Verify the actual multi-stop road route, which can differ from the table legs.
+    const onboardSince = new Map<string, number>();
+    const caps = new Map(passengers.map((p) => [p.requestId, 1.5 * p.directMin]));
+    let elapsed = 0;
+    for (const [i, stop] of order.stops.entries()) {
+      elapsed += route.legDurationsMin[i];
+      if (stop.type === 'pickup') onboardSince.set(stop.requestId, elapsed);
+      else if (elapsed - onboardSince.get(stop.requestId)! > caps.get(stop.requestId)! + 1e-8) {
+        return { kind: 'blocked', message: tooLong };
+      }
+    }
+
+    const [latest, latestCandidate] = await Promise.all([
+      loadAcceptedPlanningRequests(rideId), loadPlanningRequest(requestId),
+    ]);
+    if (latestCandidate.error) throw latestCandidate.error;
+    if (latestCandidate.data?.status === 'accepted') {
+      if (latest.some(({ id }) => id === requestId)) {
+        const latestTrip = await loadDriverTrip(rideId, driverId);
+        if (latestTrip) return { kind: 'accepted', trip: latestTrip };
+      }
+      return { kind: 'blocked', message: 'Another driver already accepted this request.' };
+    }
+    if (JSON.stringify(latestCandidate.data) !== JSON.stringify(candidate.data)) {
+      return { kind: 'retry', message: 'This passenger’s request changed while planning. Try again.' };
+    }
+    if (JSON.stringify(latest) !== JSON.stringify(accepted)) {
+      return { kind: 'retry', message: 'The passenger list changed while planning. Retry with the current list.' };
+    }
+    const plan: RidePlan = {
+      stops: order.stops,
+      points: route.points,
+      distanceKm: route.distanceKm,
+      durationMin: route.durationMin,
+      passengerIds: [...new Set(requests.map((r) => r.passengerId))],
+    };
+    const { error } = await supabase.rpc('accept_request', {
+      request_id: requestId, ride_id: rideId, new_plan: plan,
+    });
+    if (error) throw error;
+    return { kind: 'accepted', trip: { ...trip, plan } };
+  } finally {
+    acceptingRides.delete(rideId);
+  }
 }
 
 // Passenger: save (or update) their open request so drivers can see it.

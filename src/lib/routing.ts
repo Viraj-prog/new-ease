@@ -30,13 +30,15 @@ export type RouteInfo = {
   points: Pt[];
   distanceKm: number;
   durationMin: number;
+  legDurationsMin: number[];
 };
 
 // Route through any number of points, in order (OSRM wants longitude first).
-export async function getRoute(stops: Pt[]): Promise<RouteInfo | null> {
+export async function getRoute(stops: Pt[], signal?: AbortSignal): Promise<RouteInfo | null> {
   const coords = stops.map((p) => `${p.lng},${p.lat}`).join(";");
   const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
-  const res = await fetch(url, { headers: { "User-Agent": UA } });
+  const res = await fetch(url, { headers: { "User-Agent": UA }, signal });
+  if (!res.ok) return null;
   const json = await res.json();
   if (json.code !== "Ok" || !json.routes?.length) return null;
   const r = json.routes[0];
@@ -47,5 +49,7 @@ export async function getRoute(stops: Pt[]): Promise<RouteInfo | null> {
     })),
     distanceKm: r.distance / 1000,
     durationMin: r.duration / 60,
+    legDurationsMin: Array.isArray(r.legs)
+      ? r.legs.map((leg: { duration: number }) => leg.duration / 60) : [],
   };
 }

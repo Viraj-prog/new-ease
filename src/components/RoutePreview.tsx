@@ -6,6 +6,24 @@ import { type Colors } from '@/styles/theme';
 import { StyleSheet, Text, View } from 'react-native';
 import PressButton from '@/components/PressButton';
 import InlineNotice from '@/components/InlineNotice';
+import type { RidePlan } from '@/lib/rides';
+
+export function PlannedRouteSummary({ plan }: { plan: RidePlan }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+  return (
+    <View style={styles.planSummary}>
+      <Text style={styles.value}>Planned route</Text>
+      <Text style={styles.labelEdit}>{plan.distanceKm.toFixed(1)} km · {Math.round(plan.durationMin)} min</Text>
+      <View style={styles.labelRow}>
+        <View style={[styles.legendDot, { backgroundColor: colors.brand }]} />
+        <Text style={styles.label}>Pickup</Text>
+        <View style={[styles.legendDot, { backgroundColor: colors.alert }]} />
+        <Text style={styles.label}>Drop-off</Text>
+      </View>
+    </View>
+  );
+}
 
 type Props = {
   startText: string;
@@ -102,6 +120,11 @@ export default function RoutePreview(p: Props) {
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
+    planSummary: {
+      alignItems: 'center', gap: 5, padding: 12, marginVertical: 8,
+      borderRadius: 18, borderWidth: 1, borderColor: c.border, backgroundColor: c.card,
+    },
+    legendDot: { width: 10, height: 10, borderRadius: 5 },
     top: { flexDirection: 'row', alignItems: 'stretch', gap: 10, marginTop: 6 },
     // Start and end sit in their own light grey cell, like the distance / time tag.
     stopsCol: {

@@ -4,19 +4,20 @@ import { fonts } from '@/styles/fonts';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 // An error shown inside a page or popup, with the same red mark as the top notification.
-export default function InlineNotice({ message, style, onDismiss }: {
+export default function InlineNotice({ message, style, onDismiss, onRetry }: {
   message: string;
   style?: StyleProp<ViewStyle>;
   onDismiss?: () => void;
+  onRetry?: () => void;
 }) {
   const { colors } = useTheme();
   return (
     <View style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }, style]}>
       <AlertIcon size={36} />
       <Text style={[styles.text, { color: colors.text }]}>{message}</Text>
-      {onDismiss && (
-        <Pressable accessibilityRole='button' onPress={onDismiss} hitSlop={8}>
-          <Text style={[styles.dismiss, { color: colors.brand }]}>Dismiss</Text>
+      {(onRetry || onDismiss) && (
+        <Pressable accessibilityRole='button' onPress={onRetry ?? onDismiss} hitSlop={8}>
+          <Text style={[styles.dismiss, { color: colors.brand }]}>{onRetry ? 'Retry' : 'Dismiss'}</Text>
         </Pressable>
       )}
     </View>

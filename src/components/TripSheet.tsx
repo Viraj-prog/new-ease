@@ -17,6 +17,7 @@ type Props = {
   booked: { name: string | null } | null;
   // Notices such as "Trip posted: 6.2 km" or an error from answering a request.
   message: string;
+  responding?: boolean;
   onAccept: () => void;
   onDecline: () => void;
   onNotNow: () => void;
@@ -105,12 +106,12 @@ export default function TripSheet(p: Props) {
 
         <View style={styles.row}>
           {r.status === 'pending' && (
-            <PressButton style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onDecline}>
+            <PressButton disabled={p.responding} style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onDecline}>
               <Text style={[styles.buttonText, { color: colors.onAlert }]}>Decline</Text>
             </PressButton>
           )}
-          <PressButton style={[styles.button, { backgroundColor: colors.brand }]} onPress={p.onAccept}>
-            <Text style={[styles.buttonText, { color: colors.onBrand }]}>Accept</Text>
+          <PressButton disabled={p.responding} style={[styles.button, { backgroundColor: colors.brand }]} onPress={p.onAccept}>
+            <Text style={[styles.buttonText, { color: colors.onBrand }]}>{p.responding ? 'Working…' : 'Accept'}</Text>
           </PressButton>
         </View>
         <Pressable onPress={p.onNotNow} hitSlop={8}>

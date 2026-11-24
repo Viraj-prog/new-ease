@@ -1,10 +1,11 @@
 import type { MapMarker } from '@/components/map';
 import { errText, resolveDestination, resolveStart } from '@/lib/places';
 import {
-  answerRequest,
+  acceptPlannedRequest,
+  declineRequest,
   finishTrip,
-  isTripActive,
   loadActiveTrip,
+  loadDriverTrip,
   loadRequests,
   postTrip,
   type Req,
@@ -19,6 +20,8 @@ export function useDriverFlow(userId: string | undefined, active = true) {
   const [msg, setMsg] = useState('');
   const [trip, setTrip] = useState<Trip | null>(null);
   const [requests, setRequests] = useState<Req[]>([]);
+  const [responding, setResponding] = useState(false);
+  const [acceptError, setAcceptError] = useState<{ message: string; retry?: Req } | null>(null);
   // A dot the driver tapped; otherwise the popup shows the next unanswered request.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Requests the driver closed with "Not now", so the popup does not keep coming back.
@@ -28,6 +31,7 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     setMsg('');
     setTrip(null);
     setRequests([]);
+    setAcceptError(null);
     setSelectedId(null);
     setDismissed([]);
   }, []);
@@ -94,8 +98,12 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     try {
       const shown = tripRef.current;
       if (shown) {
-        if (await isTripActive(shown.rideId)) return;
+        const latest = await loadDriverTrip(shown.rideId, userId);
         if (tripRef.current !== shown) return;
+        if (latest) {
+          setTrip(latest);
+          return;
+        }
         clear();
       }
       const t = await loadActiveTrip(userId);
@@ -152,17 +160,28 @@ export function useDriverFlow(userId: string | undefined, active = true) {
   }, [trip, userId]);
 
   async function respond(req: Req, accept: boolean) {
-    if (!trip) return;
+    if (!trip || !userId || responding) return false;
+    setResponding(true);
+    setAcceptError(null);
     try {
-      await answerRequest(trip.rideId, req.id, accept);
+      if (accept) {
+        const result = await acceptPlannedRequest(userId, trip.rideId, req.id);
+        if (result.kind !== 'accepted') {
+          setAcceptError({ message: result.message, retry: result.kind === 'retry' ? req : undefined });
+          return false;
+        }
+        setTrip((shown) => shown?.rideId === result.trip.rideId ? result.trip : shown);
+      } else {
+        await declineRequest(trip.rideId, req.id);
+      }
       setRequests((rs) => rs.filter((r) => r.id !== req.id));
       setSelectedId(null);
+      return true;
     } catch (e) {
-      console.error(e);
-      setMsg(errText(e));
-      // Close the popup so the message is visible (for example "This ride is already taken").
-      setSelectedId(null);
-      setDismissed((d) => [...d, req.id]);
+      setAcceptError({ message: errText(e) });
+      return false;
+    } finally {
+      setResponding(false);
     }
   }
 
@@ -185,7 +204,7 @@ export function useDriverFlow(userId: string | undefined, active = true) {
   }));
 
   return {
-    loading, msg, trip, requests, popup, markers,
+    loading, msg, trip, requests, popup, markers, responding, acceptError,
     post, respond, clear, closePopup, finish,
   };
 }
