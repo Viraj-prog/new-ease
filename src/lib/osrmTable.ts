@@ -32,11 +32,18 @@ function parseTimes(body: unknown, size: number): DrivingTimeMatrix | null {
   return Object.freeze(minutes);
 }
 
-async function requestTable(key: string, size: number): Promise<TableResult> {
-  const wait = nextRequestAt - Date.now();
-  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-  nextRequestAt = Date.now() + REQUEST_SPACING_MS;
+export function queuePlanningOsrmRequest<T>(run: () => Promise<T>): Promise<T> {
+  const request = queue.then(async () => {
+    const wait = nextRequestAt - Date.now();
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    nextRequestAt = Date.now() + REQUEST_SPACING_MS;
+    return run();
+  });
+  queue = request.then(() => undefined, () => undefined);
+  return request;
+}
 
+async function requestTable(key: string, size: number): Promise<TableResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -89,7 +96,7 @@ export function getDrivingTimeMatrix(points: readonly Pt[]): Promise<TableResult
   const existing = pending.get(key);
   if (existing) return existing;
 
-  const request = queue.then(() => requestTable(key, points.length)).then((result) => {
+  const request = queuePlanningOsrmRequest(() => requestTable(key, points.length)).then((result) => {
     if (result.kind === 'matrix') {
       cache.set(key, { times: result.times, expiresAt: Date.now() + CACHE_TTL_MS });
       if (cache.size > MAX_CACHE_ENTRIES) {
@@ -101,6 +108,5 @@ export function getDrivingTimeMatrix(points: readonly Pt[]): Promise<TableResult
   }).finally(() => pending.delete(key));
 
   pending.set(key, request);
-  queue = request.then(() => undefined, () => undefined);
   return request;
 }

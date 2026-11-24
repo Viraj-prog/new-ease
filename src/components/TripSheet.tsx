@@ -1,6 +1,8 @@
 import Icon from '@/components/Icon';
 import StopsList from '@/components/StopsList';
-import type { Req } from '@/lib/rides';
+import type { CandidateEstimate, Req } from '@/lib/rides';
+import { formatDriverFare, formatExtraDistance } from '@/lib/driverExtras';
+import InlineNotice from '@/components/InlineNotice';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
@@ -18,6 +20,9 @@ type Props = {
   // Notices such as "Trip posted: 6.2 km" or an error from answering a request.
   message: string;
   responding?: boolean;
+  estimate?: CandidateEstimate;
+  canAccept?: boolean;
+  onRetryCheck?: () => void;
   onAccept: () => void;
   onDecline: () => void;
   onNotNow: () => void;
@@ -103,6 +108,14 @@ export default function TripSheet(p: Props) {
             {`Detour ${worst.toFixed(1)} km · within your ${p.mddKm} km limit`}
           </Text>
         </View>
+        <Text style={styles.detailText}>
+          {formatDriverFare(r.fare)}
+          {p.estimate?.kind === 'available' ? ` · ${formatExtraDistance(p.estimate.extraKm)}` : ''}
+        </Text>
+        {p.estimate && p.estimate.kind !== 'available' && (
+          <InlineNotice message={p.estimate.message} onRetry={p.estimate.kind === 'retry' ? p.onRetryCheck : undefined} />
+        )}
+        {!p.estimate && <Text style={styles.detailText}>Checking route…</Text>}
 
         <View style={styles.row}>
           {r.status === 'pending' && (
@@ -110,7 +123,11 @@ export default function TripSheet(p: Props) {
               <Text style={[styles.buttonText, { color: colors.onAlert }]}>Decline</Text>
             </PressButton>
           )}
-          <PressButton disabled={p.responding} style={[styles.button, { backgroundColor: colors.brand }]} onPress={p.onAccept}>
+          <PressButton
+            disabled={p.responding || p.canAccept === false || p.estimate?.kind === 'blocked'}
+            style={[styles.button, { backgroundColor: colors.brand }]}
+            onPress={p.onAccept}
+          >
             <Text style={[styles.buttonText, { color: colors.onBrand }]}>{p.responding ? 'Working…' : 'Accept'}</Text>
           </PressButton>
         </View>

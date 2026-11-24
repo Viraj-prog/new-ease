@@ -4,14 +4,15 @@ import PressButton from '@/components/PressButton';
 import InteractiveMap from '@/components/map';
 import { PlannedRouteSummary } from '@/components/RoutePreview';
 import { useAuth } from '@/lib/auth';
-import { formatDriverFare } from '@/lib/driverExtras';
+import { useDriverRequestEstimates } from '@/hooks/useDriverRequestEstimates';
+import { formatDriverFare, formatExtraDistance } from '@/lib/driverExtras';
 import { useNotify } from '@/lib/notify';
 import { errText } from '@/lib/places';
-import { acceptPlannedRequest, declineRequest, loadDriverTrip, loadRequests, type Req, type RidePlan } from '@/lib/rides';
+import { acceptPlannedRequest, declineRequest, loadDriverRideState, loadDriverTrip, type DriverRideState, type Req } from '@/lib/rides';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useDrawerStatus } from 'expo-router/drawer';
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -26,13 +27,17 @@ export default function RideRequestsScreen() {
   const styles = makeStyles(colors);
   const insets = useSafeAreaInsets();
   const notify = useNotify();
-  const [requests, setRequests] = useState<Req[]>([]);
-  const [plan, setPlan] = useState<RidePlan | null>(null);
+  const [rideState, setRideState] = useState<DriverRideState | null>(null);
   const [decisionError, setDecisionError] = useState<{ message: string; retry?: Req } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const focused = useIsFocused();
+  const current = rideState?.trip.rideId === rideId ? rideState : null;
+  const estimates = useDriverRequestEstimates(current, focused && !busy);
+  const plan = current?.trip.plan;
+  const requests = current?.requests ?? [];
   const loadRevision = useRef(0);
 
   const backToRides = useCallback(() => router.navigate('/rides'), []);
@@ -51,10 +56,9 @@ export default function RideRequestsScreen() {
     try {
       const trip = rideId && userId ? await loadDriverTrip(rideId, userId) : null;
       if (!trip || !userId) throw new Error('This scheduled ride is no longer available.');
-      const rows = await loadRequests(trip, userId);
+      const next = await loadDriverRideState(trip, userId);
       if (revision !== loadRevision.current) return;
-      setPlan(trip.plan);
-      setRequests(rows);
+      setRideState(next);
       setError('');
     } catch (e) {
       if (revision !== loadRevision.current) return;
@@ -84,7 +88,8 @@ export default function RideRequestsScreen() {
           setDecisionError({ message: result.message, retry: result.kind === 'retry' ? request : undefined });
           return;
         }
-        setPlan(result.trip.plan);
+        setRideState((state) => state?.trip.rideId === result.trip.rideId
+          ? { ...state, trip: result.trip } : state);
       } else {
         await declineRequest(rideId, request.id);
       }
@@ -99,6 +104,7 @@ export default function RideRequestsScreen() {
 
   async function refresh() {
     setRefreshing(true);
+    estimates.retryChecks();
     await reload();
     setRefreshing(false);
   }
@@ -119,6 +125,7 @@ export default function RideRequestsScreen() {
         <Text style={styles.title}>Ride requests</Text>
         {loading && <ActivityIndicator color={colors.brand} />}
         {!!error && <InlineNotice message={error} />}
+        {current?.planError && <InlineNotice message={current.planError} onRetry={() => void reload()} />}
         {decisionError && (
           <InlineNotice
             message={decisionError.message}
@@ -138,14 +145,16 @@ export default function RideRequestsScreen() {
           </View>
         )}
         {!loading && !error && groups.map((group) => {
-          const rows = requests.filter((request) => request.status === group.status);
+          const all = requests.filter((request) => request.status === group.status);
+          const rows = group.status === 'accepted' ? all : all.filter((request) => estimates.visibleIds.has(request.id));
           return (
             <View style={styles.group} key={group.status}>
               <Text style={styles.heading}>{group.label}</Text>
-              {!rows.length && <Text style={styles.detail}>{group.empty}</Text>}
+              {!rows.length && <Text style={styles.detail}>{all.length ? 'More requests can be checked below.' : group.empty}</Text>}
               {rows.map((request) => {
                 const pickup = plan?.stops.findIndex((stop) => stop.requestId === request.id && stop.type === 'pickup') ?? -1;
                 const dropoff = plan?.stops.findIndex((stop) => stop.requestId === request.id && stop.type === 'dropoff') ?? -1;
+                const estimate = request.status === 'accepted' ? undefined : estimates.getEstimate(request);
                 return (
                   <View style={styles.card} key={request.id}>
                     <View style={styles.row}>
@@ -158,13 +167,29 @@ export default function RideRequestsScreen() {
                         : `Pickup ${request.pickupKm.toFixed(1)} km away · Drop-off ${request.dropoffKm.toFixed(1)} km away`}
                     </Text>
                     {request.status !== 'accepted' && (
+                      estimate?.kind === 'available'
+                        ? <Text style={styles.detail}>{formatExtraDistance(estimate.extraKm)}</Text>
+                        : estimate
+                          ? <InlineNotice
+                              message={estimate.message}
+                              onRetry={estimate.kind === 'retry' ? estimates.retryChecks : undefined}
+                            />
+                          : <Text style={styles.detail}>
+                              {current?.planError ? 'Waiting for an updated pickup plan.' : 'Checking route…'}
+                            </Text>
+                    )}
+                    {request.status !== 'accepted' && (
                       <View style={styles.row}>
                         {request.status === 'pending' && (
                           <PressButton ghost disabled={busy} style={styles.button} onPress={() => respond(request, false)}>
                             <Text style={styles.decline}>Decline</Text>
                           </PressButton>
                         )}
-                        <PressButton disabled={busy} style={[styles.button, styles.accept]} onPress={() => respond(request, true)}>
+                        <PressButton
+                          disabled={busy || estimate?.kind === 'blocked' || current?.trip.status !== 'scheduled'}
+                          style={[styles.button, styles.accept]}
+                          onPress={() => respond(request, true)}
+                        >
                           <Text style={styles.acceptText}>{busy ? 'Working…' : 'Accept'}</Text>
                         </PressButton>
                       </View>
@@ -175,6 +200,11 @@ export default function RideRequestsScreen() {
             </View>
           );
         })}
+        {!error && estimates.hasMore && (
+          <PressButton ghost style={styles.more} disabled={estimates.checking || !!current?.planError} onPress={estimates.checkMore}>
+            <Text style={styles.moreText}>{estimates.checking ? 'Checking requests…' : 'Check more requests'}</Text>
+          </PressButton>
+        )}
       </ScrollView>
       <BackButton onPress={backToRides} />
     </View>
@@ -196,4 +226,6 @@ const makeStyles = (c: Colors) => StyleSheet.create({
   decline: { fontFamily: fonts.semibold, color: c.alertText },
   accept: { backgroundColor: c.brand },
   acceptText: { fontFamily: fonts.semibold, color: c.onBrand },
+  more: { alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: c.border },
+  moreText: { fontFamily: fonts.semibold, color: c.brand },
 });

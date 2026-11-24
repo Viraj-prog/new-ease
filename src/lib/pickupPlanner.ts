@@ -8,6 +8,23 @@ export type PickupPassenger = {
 };
 
 export type PickupStop = Pt & { type: 'pickup' | 'dropoff'; requestId: string };
+
+// Request IDs distinguish multiple bookings from the same passenger.
+export function pickupPlanMatches(
+  plan: { passengerIds: readonly string[]; stops: readonly PickupStop[] } | null,
+  accepted: readonly { id: string; passengerId: string }[],
+) {
+  if (!plan) return accepted.length === 0;
+  if (accepted.length === 0 || plan.stops.length !== 2 * accepted.length) return false;
+  const sameIds = (a: readonly string[], b: readonly string[]) => {
+    const sorted = [...b].sort();
+    return a.length === sorted.length && [...a].sort().every((id, index) => id === sorted[index]);
+  };
+  const requests = accepted.map(({ id }) => id);
+  return sameIds(plan.passengerIds, [...new Set(accepted.map((r) => r.passengerId))])
+    && sameIds(plan.stops.filter(({ type }) => type === 'pickup').map(({ requestId }) => requestId), requests)
+    && sameIds(plan.stops.filter(({ type }) => type === 'dropoff').map(({ requestId }) => requestId), requests);
+}
 export type DrivingTimeMatrix = readonly (readonly (number | null)[])[];
 export type PickupPlanResult =
   | { kind: 'planned'; stops: PickupStop[]; durationMin: number; method: 'exact' | 'heuristic' }

@@ -6,21 +6,28 @@ import {
   finishTrip,
   loadActiveTrip,
   loadDriverTrip,
-  loadRequests,
+  loadDriverRideState,
   postTrip,
   type Req,
   type Trip,
+  type DriverRideState,
 } from '@/lib/rides';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useDriverRequestEstimates } from './useDriverRequestEstimates';
 
 // Driver side: post a trip, then see and answer passengers near the route.
 export function useDriverFlow(userId: string | undefined, active = true) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [trip, setTrip] = useState<Trip | null>(null);
-  const [requests, setRequests] = useState<Req[]>([]);
+  const [rideState, setRideState] = useState<DriverRideState | null>(null);
   const [responding, setResponding] = useState(false);
+  const focused = useIsFocused();
+  const loadRevision = useRef(0);
+  const tripId = trip?.rideId;
+  const currentRide = tripId && rideState?.trip.rideId === tripId ? rideState : null;
+  const estimates = useDriverRequestEstimates(currentRide, focused && active && !responding);
   const [acceptError, setAcceptError] = useState<{ message: string; retry?: Req } | null>(null);
   // A dot the driver tapped; otherwise the popup shows the next unanswered request.
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -28,9 +35,10 @@ export function useDriverFlow(userId: string | undefined, active = true) {
   const [dismissed, setDismissed] = useState<string[]>([]);
 
   const clear = useCallback(() => {
+    loadRevision.current += 1;
     setMsg('');
     setTrip(null);
-    setRequests([]);
+    setRideState(null);
     setAcceptError(null);
     setSelectedId(null);
     setDismissed([]);
@@ -136,28 +144,31 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     }
   }
 
-  // Load passengers near the route, and refresh every 10 seconds.
-  useEffect(() => {
-    if (!trip || !userId) return;
-    let cancelled = false;
-
-    async function load() {
-      if (!trip || !userId) return;
-      try {
-        const found = await loadRequests(trip, userId);
-        if (!cancelled) setRequests(found);
-      } catch (e) {
-        console.error(e);
-      }
+  const refreshRequests = useCallback(async (rideId: string, saved?: Trip) => {
+    if (!userId) return;
+    const revision = ++loadRevision.current;
+    try {
+      const latest = saved ?? await loadDriverTrip(rideId, userId);
+      if (!latest) return;
+      const state = await loadDriverRideState(latest, userId);
+      if (loadRevision.current !== revision) return;
+      setRideState(state);
+      setTrip((shown) => shown?.rideId === rideId ? state.trip : shown);
+    } catch (e) {
+      if (loadRevision.current === revision) console.error(e);
     }
+  }, [userId]);
 
-    load();
-    const t = setInterval(load, 10000);
+  // Refresh only while driver Home is in focus. After acceptance, refresh immediately.
+  useFocusEffect(useCallback(() => {
+    if (!tripId || !active) return;
+    void refreshRequests(tripId);
+    const t = setInterval(() => void refreshRequests(tripId), 10000);
     return () => {
-      cancelled = true;
+      loadRevision.current += 1;
       clearInterval(t);
     };
-  }, [trip, userId]);
+  }, [active, refreshRequests, tripId]));
 
   async function respond(req: Req, accept: boolean) {
     if (!trip || !userId || responding) return false;
@@ -170,11 +181,13 @@ export function useDriverFlow(userId: string | undefined, active = true) {
           setAcceptError({ message: result.message, retry: result.kind === 'retry' ? req : undefined });
           return false;
         }
+        setRideState(null);
         setTrip((shown) => shown?.rideId === result.trip.rideId ? result.trip : shown);
+        void refreshRequests(trip.rideId, result.trip);
       } else {
         await declineRequest(trip.rideId, req.id);
+        void refreshRequests(trip.rideId);
       }
-      setRequests((rs) => rs.filter((r) => r.id !== req.id));
       setSelectedId(null);
       return true;
     } catch (e) {
@@ -185,10 +198,13 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     }
   }
 
+  const requests = currentRide?.requests ?? [];
+  const visible = requests.filter((r) => r.status !== 'accepted' && estimates.visibleIds.has(r.id));
   // The request shown in the popup: a tapped dot first, else the first waiting request.
   const popup =
-    requests.find((r) => r.id === selectedId) ??
-    requests.find((r) => r.status === 'pending' && !dismissed.includes(r.id)) ??
+    visible.find((r) => r.id === selectedId) ??
+    visible.find((r) => r.status === 'pending' && !dismissed.includes(r.id)
+      && estimates.getEstimate(r)?.kind !== 'blocked') ??
     null;
 
   function closePopup() {
@@ -196,7 +212,7 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     setSelectedId(null);
   }
 
-  const markers: MapMarker[] = requests.filter((r) => r.status !== 'accepted').map((r) => ({
+  const markers: MapMarker[] = visible.filter((r) => estimates.getEstimate(r)?.kind !== 'blocked').map((r) => ({
     id: r.id,
     point: r.pickup,
     color: '#16a34a',
@@ -205,6 +221,10 @@ export function useDriverFlow(userId: string | undefined, active = true) {
 
   return {
     loading, msg, trip, requests, popup, markers, responding, acceptError,
+    planError: currentRide?.planError,
+    popupEstimate: popup ? estimates.getEstimate(popup) : undefined,
+    retryChecks: estimates.retryChecks,
+    retryPlan: tripId ? () => void refreshRequests(tripId) : undefined,
     post, respond, clear, closePopup, finish,
   };
 }

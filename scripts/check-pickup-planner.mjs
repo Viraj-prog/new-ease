@@ -1,7 +1,7 @@
 // Run with Node 24+. Add --live to request an Edmonton matrix from OSRM.
 import assert from 'node:assert/strict';
 import { getDrivingTimeMatrix } from '../src/lib/osrmTable.ts';
-import { pickupPlanPoints, planPickupOrder } from '../src/lib/pickupPlanner.ts';
+import { pickupPlanMatches, pickupPlanPoints, planPickupOrder } from '../src/lib/pickupPlanner.ts';
 
 const southgate = { lat: 53.4877, lng: -113.5156 };
 const university = { lat: 53.5232, lng: -113.5263 };
@@ -77,6 +77,13 @@ assert.deepEqual(stopLabels(two), [
   `pickup ${riderA.requestId}`, `pickup ${riderB.requestId}`,
   `dropoff ${riderA.requestId}`, `dropoff ${riderB.requestId}`,
 ]);
+const bookings = riders.map(({ requestId }) => ({ id: requestId, passengerId: 'shared-rider' }));
+const saved = { stops: two.stops, passengerIds: ['shared-rider'] };
+assert.equal(pickupPlanMatches(saved, [...bookings].reverse()), true);
+assert.equal(pickupPlanMatches(saved, bookings.slice(0, 1)), false);
+assert.equal(pickupPlanMatches(saved, []), false);
+assert.equal(pickupPlanMatches(null, []), true);
+console.log('Saved plan check: a cancelled booking is detected even when both bookings share a passenger ID.');
 
 // In this directed fixture, each rider fits alone. Serving both requires an
 // interleaving that puts at least one rider over the nine-minute cap.

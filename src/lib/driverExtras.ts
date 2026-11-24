@@ -44,6 +44,11 @@ export function driverExtras(r: Result): DriverExtras {
 
 export const formatDriverFare = (fare: Result['fare']) => fare === null ? 'Fare unavailable' : `$${fare.toFixed(2)}`;
 
+export function formatExtraDistance(extraKm: number) {
+  const absolute = Math.abs(extraKm).toFixed(1);
+  return extraKm < 0 && absolute !== '0.0' ? `${absolute} km shorter` : `${absolute} extra km`;
+}
+
 export const formatDriverDeparture = (departAt: Result['departAt']) =>
   new Date(departAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 

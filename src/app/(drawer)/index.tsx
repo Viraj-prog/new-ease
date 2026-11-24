@@ -651,6 +651,7 @@ export default function HomeScreen() {
               ) : showTrip && driver.trip ? (
                 <>
                   {visiblePlan && <PlannedRouteSummary plan={visiblePlan} />}
+                  {driver.planError && <InlineNotice message={driver.planError} onRetry={driver.retryPlan} />}
                   {driver.acceptError && (
                     <InlineNotice
                       message={driver.acceptError.message}
@@ -667,6 +668,9 @@ export default function HomeScreen() {
                     booked={bookedNow}
                     message={message}
                     responding={driver.responding}
+                    estimate={driver.popupEstimate}
+                    canAccept={driver.trip.status === 'scheduled'}
+                    onRetryCheck={driver.retryChecks}
                     onAccept={() => answer(true)}
                     onDecline={() => answer(false)}
                     onNotNow={driver.closePopup}
