@@ -4,6 +4,11 @@ import { supabase } from './supabase';
 
 export type RideStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
 const activeRideStatuses: RideStatus[] = ['scheduled', 'in_progress'];
+const uuidPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
+
+function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && uuidPattern.test(value);
+}
 
 export function isActiveRide(status: RideStatus) {
   return activeRideStatuses.includes(status);
@@ -16,6 +21,7 @@ export type Trip = {
   distanceKm: number;
   durationMin: number;
   mdd: number;
+  pricePerKm: number | null;
   when: Date;
 };
 
@@ -30,6 +36,7 @@ export type Req = {
   // First and last name; null if the database does not let this driver read it.
   passengerName: string | null;
   departAt: string | null;
+  fare: number | null;
 };
 
 type RideRow = {
@@ -101,6 +108,7 @@ export async function postTrip(args: {
     .select('rideId')
     .single();
   if (error) throw error;
+  if (!isUuid(data?.rideId)) throw new Error('The scheduled ride did not return a valid ID.');
 
   return {
     rideId: data.rideId,
@@ -108,12 +116,14 @@ export async function postTrip(args: {
     distanceKm: r.distanceKm,
     durationMin: r.durationMin,
     mdd: args.mdd,
+    pricePerKm: args.pricePerKm,
     when: args.when,
   };
 }
 
 // Driver: is this trip still unfinished? False once it was finished or cancelled anywhere.
 export async function isTripActive(rideId: string): Promise<boolean> {
+  if (!isUuid(rideId)) return false;
   const { data, error } = await supabase
     .from('rides')
     .select('status')
@@ -125,22 +135,46 @@ export async function isTripActive(rideId: string): Promise<boolean> {
 
 // Driver: their earliest unfinished trip, so it can be shown again after a restart.
 export async function loadActiveTrip(driverId: string): Promise<Trip | null> {
+  if (!isUuid(driverId)) return null;
   const { data, error } = await supabase
     .from('rides')
-    .select('rideId, route, tripMdd, departAt')
+    .select('rideId, route, tripMdd, departAt, pricePerKm')
     .eq('driverId', driverId)
     .in('status', activeRideStatuses)
     .order('departAt', { ascending: true })
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  if (!data?.route?.points?.length) return null;
+  return asTrip(data);
+}
+
+export async function loadDriverTrip(rideId: string, driverId: string): Promise<Trip | null> {
+  if (!isUuid(rideId) || !isUuid(driverId)) return null;
+  const { data, error } = await supabase.from('rides')
+    .select('rideId, route, tripMdd, departAt, pricePerKm')
+    .eq('rideId', rideId)
+    .eq('driverId', driverId)
+    .in('status', activeRideStatuses)
+    .maybeSingle();
+  if (error) throw error;
+  return asTrip(data);
+}
+
+function asTrip(data: {
+  rideId: string;
+  route: { points: Pt[]; distanceKm: number; durationMin: number } | null;
+  tripMdd: number | null;
+  departAt: string | null;
+  pricePerKm: number | null;
+} | null): Trip | null {
+  if (!isUuid(data?.rideId) || !data.route?.points?.length) return null;
   return {
     rideId: data.rideId,
     route: data.route.points,
     distanceKm: data.route.distanceKm,
     durationMin: data.route.durationMin,
     mdd: data.tripMdd ?? 2,
+    pricePerKm: data.pricePerKm,
     when: data.departAt ? new Date(data.departAt) : new Date(),
   };
 }
@@ -152,49 +186,63 @@ export async function finishTrip(rideId: string) {
 }
 
 // Driver: passengers whose requests fall near the trip's route.
-export async function loadRequests(trip: Trip): Promise<Req[]> {
+export async function loadRequests(trip: Trip, driverId: string): Promise<Req[]> {
+  if (!isUuid(trip.rideId) || !isUuid(driverId)) return [];
   const { from, to } = dayRange(trip.when);
-  const { data, error } = await supabase
-    .from('ride_requests')
-    .select('*')
-    .gte('departAt', from)
-    .lte('departAt', to)
-    .or(`status.eq.open,and(status.eq.pending,selectedRideId.eq.${trip.rideId})`);
-  if (error) throw error;
+  const fields = 'id, passengerId, pickupLat, pickupLng, dropoffLat, dropoffLng, departAt, directKm, status';
+  const [searching, offers] = await Promise.all([
+    supabase.from('ride_requests').select(fields)
+      .eq('status', 'open').neq('passengerId', driverId)
+      .gte('departAt', from).lte('departAt', to),
+    supabase.from('ride_offers').select(`status, fare, ride_requests!inner(${fields})`)
+      .eq('rideId', trip.rideId),
+  ]);
+  if (searching.error) throw searching.error;
+  if (offers.error) throw offers.error;
 
+  type RequestRow = NonNullable<typeof searching.data>[number];
+  type OfferRow = { status: OfferStatus; fare: number | null; ride_requests: RequestRow };
+  const linked = (offers.data ?? []) as unknown as OfferRow[];
+  const offeredIds = new Set(linked.map((offer) => offer.ride_requests.id));
+  const candidates = [
+    ...linked.filter(({ status, ride_requests }) =>
+      status === 'accepted' || (status === 'pending' && ['open', 'pending'].includes(ride_requests.status)),
+    ).map((offer) => ({ row: offer.ride_requests, status: offer.status, fare: offer.fare })),
+    ...(searching.data ?? []).filter((row) => !offeredIds.has(row.id)).map((row) => ({
+      row, status: 'open',
+      fare: trip.pricePerKm == null || row.directKm == null ? null : trip.pricePerKm * row.directKm,
+    })),
+  ];
   const found: Req[] = [];
-  for (const r of data ?? []) {
+  for (const { row: r, status, fare } of candidates) {
+    if (![r.pickupLat, r.pickupLng, r.dropoffLat, r.dropoffLng].every(Number.isFinite)) continue;
     const pickup = { lat: r.pickupLat, lng: r.pickupLng };
     const dropoff = { lat: r.dropoffLat, lng: r.dropoffLng };
     const c = classifyTrip(trip.route, pickup, dropoff, trip.mdd);
-    if (c.zone === 'out') continue;
+    if (c.zone === 'out' && status !== 'accepted') continue;
     found.push({
       id: r.id,
-      status: r.status,
+      status,
       pickup,
       passengerId: r.passengerId,
       passengerName: null,
       departAt: r.departAt ?? null,
       pickupKm: c.pickupKm,
       dropoffKm: c.dropoffKm,
+      fare,
     });
   }
 
   // Names are only needed for passengers who have actually asked for this ride.
-  const askingIds = [...new Set(found.filter((r) => r.status === 'pending').map((r) => r.passengerId))];
+  const askingIds = [...new Set(found.filter((r) => r.status !== 'open').map((r) => r.passengerId))];
   if (askingIds.length > 0) {
     const { data: people, error: peopleError } = await supabase
       .from('users')
       .select('userId, firstName, lastName')
       .in('userId', askingIds);
-    // A blocked read (policy missing) returns no rows rather than an error, so check both.
-    if (peopleError || !people?.length) {
-      console.warn(
-        'No passenger names came back. Run section 10 of supabase/driver_setup.sql.',
-        peopleError?.message ?? '',
-      );
-    }
+    if (peopleError) console.warn('Could not load passenger names', peopleError.message);
     for (const r of found) {
+      if (r.status === 'open') continue;
       const p = people?.find((u) => u.userId === r.passengerId);
       const name = p ? `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() : '';
       r.passengerName = name || null;
@@ -203,18 +251,16 @@ export async function loadRequests(trip: Trip): Promise<Req[]> {
   return found;
 }
 
-// Driver: accept or decline a request. Accepting is one database function that checks the
-// ride is still free, marks it taken, and declines the other pending requests for it.
-export async function answerRequest(req: Req, accept: boolean) {
+// The database awards the passenger to the first driver who accepts.
+export async function answerRequest(rideId: string, requestId: string, accept: boolean) {
   if (accept) {
-    const { error } = await supabase.rpc('accept_request', { request_id: req.id });
+    const { error } = await supabase.rpc('accept_request', {
+      request_id: requestId, ride_id: rideId, new_plan: null,
+    });
     if (error) throw error;
     return;
   }
-  const { error } = await supabase
-    .from('ride_requests')
-    .update({ status: 'declined' })
-    .eq('id', req.id);
+  const { error } = await supabase.rpc('decline_offer', { request_id: requestId, ride_id: rideId });
   if (error) throw error;
 }
 
@@ -240,7 +286,6 @@ export async function saveRequest(args: {
     directMin: args.directMin,
     dropoffText: args.dropoffText.trim() || null,
     price: null,
-    selectedRideId: null,
     status: 'open',
     needsApproval: false,
   };
@@ -261,7 +306,7 @@ export async function saveRequest(args: {
 
 // Passenger: scheduled rides on the same local day, closest departure first.
 export async function searchRides(
-  from: Pt, to: Pt, when: Date, userId: string, directKm: number,
+  from: Pt, to: Pt, when: Date, userId: string, directKm: number | null,
 ): Promise<Result[]> {
   const { from: a, to: b } = dayRange(when);
   const requestedTime = when.getTime();
@@ -274,8 +319,7 @@ export async function searchRides(
     .neq('driverId', userId)
     .gte('departAt', a)
     .lte('departAt', b)
-    .eq('status', 'scheduled')
-    .eq('occupied', false);
+    .eq('status', 'scheduled');
   if (error) throw error;
 
   const list: Result[] = [];
@@ -291,7 +335,7 @@ export async function searchRides(
       driverName: name || 'Driver',
       rating: r.drivers?.driverRating ?? null,
       departAt: r.departAt,
-      fare: r.pricePerKm == null ? null : directKm * r.pricePerKm,
+      fare: r.pricePerKm == null || directKm == null ? null : directKm * r.pricePerKm,
       pickupKm: c.pickupKm,
       dropoffKm: c.dropoffKm,
       tripKm: r.route.distanceKm,
@@ -331,45 +375,55 @@ export async function searchRides(
   return ranked;
 }
 
-// Passenger: where their request stands (open, pending, accepted, declined).
-export async function getRequestStatus(requestId: string): Promise<string | null> {
+export type OfferStatus = 'pending' | 'accepted' | 'declined' | 'taken' | 'cancelled';
+
+export const offerStatusLabels: Record<OfferStatus, string> = {
+  pending: 'Request sent',
+  accepted: 'Accepted',
+  declined: 'Declined',
+  taken: 'Closed',
+  cancelled: 'Cancelled',
+};
+
+export async function loadRequestOffers(requestId: string) {
   const { data, error } = await supabase
     .from('ride_requests')
-    .select('status')
+    .select('acceptedRideId, ride_offers(rideId, status)')
     .eq('id', requestId)
     .maybeSingle();
   if (error) throw error;
-  return data?.status ?? null;
+  return {
+    acceptedRideId: (data?.acceptedRideId as string | null | undefined) ?? null,
+    offers: (data?.ride_offers ?? []) as { rideId: string; status: OfferStatus }[],
+  };
 }
 
-// Passenger: withdraw a request that is still waiting. It goes back to open, so other
-// drivers can still see it. Returns false if the driver had already answered.
-export async function cancelRequest(requestId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('ride_requests')
-    .update({ status: 'open', selectedRideId: null, needsApproval: false })
-    .eq('id', requestId)
-    .eq('status', 'pending')
-    .select('id');
+export async function loadDriverCancelledOfferIds(passengerId: string): Promise<string[]> {
+  const { data, error } = await supabase.from('ride_offers')
+    .select('id, ride_requests!inner(passengerId)')
+    .eq('ride_requests.passengerId', passengerId)
+    .eq('status', 'cancelled')
+    .eq('cancelledByDriver', true);
   if (error) throw error;
-  return (data?.length ?? 0) > 0;
+  return (data ?? []).map((offer) => offer.id);
 }
 
-// Passenger: ask this driver to take them.
-export async function sendRequest(requestId: string, r: Result) {
-  const { data, error } = await supabase
-    .from('ride_requests')
-    .update({
-      selectedRideId: r.rideId,
-      status: 'pending',
-      needsApproval: false,
-    })
+export async function loadOpenPassengerRequest(requestId: string, passengerId: string) {
+  if (!isUuid(requestId) || !isUuid(passengerId)) return null;
+  const { data, error } = await supabase.from('ride_requests')
+    .select('pickupLat, pickupLng, dropoffLat, dropoffLng, departAt, directKm')
     .eq('id', requestId)
+    .eq('passengerId', passengerId)
     .eq('status', 'open')
-    .select('id')
+    .is('acceptedRideId', null)
     .maybeSingle();
   if (error) throw error;
-  if (!data) throw new Error('This request has already been sent. Search again to start another request.');
+  return data;
+}
+
+export async function sendRequest(requestId: string, rideId: string) {
+  const { error } = await supabase.rpc('send_offer', { request_id: requestId, ride_id: rideId });
+  if (error) throw error;
 }
 
 // ---- Rides tab ----
@@ -410,18 +464,19 @@ export async function loadPostedRides(driverId: string, includeHistory = false):
 
   // Who has been accepted on each trip.
   const { data: accepted } = await supabase
-    .from('ride_requests')
-    .select('selectedRideId, passengerId')
-    .in('selectedRideId', rides.map((r) => r.rideId))
+    .from('ride_offers')
+    .select('rideId, ride_requests!inner(passengerId)')
+    .in('rideId', rides.map((r) => r.rideId))
     .eq('status', 'accepted');
-  const ids = [...new Set((accepted ?? []).map((a) => a.passengerId))];
+  const bookings = (accepted ?? []) as unknown as { rideId: string; ride_requests: { passengerId: string } }[];
+  const ids = [...new Set(bookings.map((a) => a.ride_requests.passengerId))];
   const { data: people } = ids.length
     ? await supabase.from('users').select('userId, firstName, lastName').in('userId', ids)
     : { data: [] };
 
   return rides.map((r) => {
-    const a = accepted?.find((x) => x.selectedRideId === r.rideId);
-    const p = a && people?.find((u) => u.userId === a.passengerId);
+    const a = bookings.find((x) => x.rideId === r.rideId);
+    const p = a && people?.find((u) => u.userId === a.ride_requests.passengerId);
     const name = p ? `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() : '';
     return {
       rideId: r.rideId,
@@ -436,18 +491,17 @@ export async function loadPostedRides(driverId: string, includeHistory = false):
 
 export async function loadBookedRides(passengerId: string): Promise<BookedRide[]> {
   const { data, error } = await supabase
-    .from('ride_requests')
+    .from('ride_offers')
     .select(
-      `id, status, selectedRideId,
+      `requestId, status, ride_requests!inner(passengerId),
        rides ( rideId, driverStartLocation, driverEndLocation, departAt, status,
                drivers ( driverRating, users ( firstName, lastName ) ) )`,
     )
-    .eq('passengerId', passengerId)
-    .in('status', ['pending', 'accepted', 'declined', 'cancelled']);
+    .eq('ride_requests.passengerId', passengerId);
   if (error) throw error;
 
   type Row = {
-    id: string;
+    requestId: string;
     status: string;
     rides: {
       rideId: string;
@@ -468,7 +522,7 @@ export async function loadBookedRides(passengerId: string): Promise<BookedRide[]
     const u = r.rides.drivers?.users;
     const name = u ? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() : '';
     list.push({
-      requestId: r.id,
+      requestId: r.requestId,
       rideId: r.rides.rideId,
       start: r.rides.driverStartLocation,
       end: r.rides.driverEndLocation,

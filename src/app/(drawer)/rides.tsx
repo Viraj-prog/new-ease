@@ -117,7 +117,7 @@ export default function RidesScreen() {
   function renderBooking(ride: BookedRide) {
     return (
       <RideBox
-        key={ride.requestId}
+        key={`${ride.requestId}-${ride.rideId}`}
         start={ride.start}
         end={ride.end}
         when={whenText(ride.departAt)}
@@ -134,7 +134,7 @@ export default function RidesScreen() {
             'Cancel this ride?',
             ride.status === 'accepted'
               ? 'Your driver will no longer have you booked.'
-              : 'Your request will be withdrawn.',
+              : 'This withdraws your request from every driver you sent it to.',
             () => cancelBooked(ride.requestId),
           ) : undefined}
       />
@@ -165,6 +165,10 @@ export default function RidesScreen() {
                       trip={trip}
                       avatarIndex={avatarSlot(index)}
                       onRedo={() => redo(trip)}
+                      onFindAnother={trip.reopenedRequestId ? () => router.navigate({
+                        pathname: '/',
+                        params: { resumeRequest: trip.reopenedRequestId },
+                      }) : undefined}
                     />
                   ))}
                 </View>
@@ -186,17 +190,17 @@ export default function RidesScreen() {
                         when={whenText(r.departAt)}
                         badge={statusLabels[r.status]}
                         badgeGreen={r.status === 'completed' || r.status === 'in_progress'}
-                        viewLabel={r.passenger ? 'View passenger' : 'No passenger yet'}
-                        viewDisabled={!r.passenger}
-                        onView={() =>
-                          r.passenger && setPerson({ role: 'Passenger', name: r.passenger.name })
-                        }
+                        viewLabel='View requests'
+                        onView={() => router.push({
+                          pathname: '/ride-requests',
+                          params: { rideId: r.rideId },
+                        })}
                         onCancel={isActiveRide(r.status) ? () =>
                           confirmCancel(
                             'Cancel this ride?',
                             r.passenger
-                              ? 'The booked passenger will lose this ride.'
-                              : 'This trip will move to History.',
+                              ? 'Accepted passengers will return to searching. This ride will move to History.'
+                              : 'This ride will move to History and any pending offers will close.',
                             () => cancelPosted(r.rideId),
                           )
                         : undefined}

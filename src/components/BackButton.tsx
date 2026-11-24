@@ -11,7 +11,13 @@ export default function BackButton({ onPress }: { onPress: () => void }) {
   const styles = makeStyles(colors);
 
   return (
-    <Pressable onPress={onPress} hitSlop={8} style={[styles.button, { top: insets.top + 8 }]}>
+    <Pressable
+      accessibilityRole='button'
+      accessibilityLabel='Back'
+      onPress={onPress}
+      hitSlop={8}
+      style={[styles.button, { top: insets.top + 8 }]}
+    >
       <Icon name='arrow-left' color={colors.text} />
     </Pressable>
   );
@@ -21,6 +27,7 @@ const makeStyles = (c: Colors) =>
   StyleSheet.create({
     button: {
       position: 'absolute',
+      zIndex: 1,
       left: 20,
       width: 46,
       height: 46,

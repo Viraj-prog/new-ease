@@ -1,9 +1,10 @@
 import BackButton from '@/components/BackButton';
 import Icon from '@/components/Icon';
+import InlineNotice from '@/components/InlineNotice';
 import MapTitleChip from '@/components/MapTitleChip';
 import VehicleBox from '@/components/VehicleBox';
 import { avatarSlot, driverExtras, formatDriverDeparture, formatDriverFare } from '@/lib/driverExtras';
-import type { Result } from '@/lib/rides';
+import { offerStatusLabels, type OfferStatus, type Result } from '@/lib/rides';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
@@ -13,8 +14,11 @@ import PressButton from '@/components/PressButton';
 
 type Props = {
   drivers: Result[];
+  emptyMessage?: string;
   // The driver the rider has tapped, if any; this shows the Confirm button.
   chosenId: string | null;
+  offerStatuses: Partial<Record<string, OfferStatus>>;
+  sendingRideId: string | null;
   onChoose: (rideId: string) => void;
   onBack: () => void;
   onConfirm: () => void;
@@ -30,18 +34,18 @@ const initialsOf = (name: string) =>
     .toUpperCase() || '?';
 
 // Full-screen "Available drivers" list. Tapping a card selects it; Confirm sends the request.
-export default function DriverList({ drivers, chosenId, onChoose, onBack, onConfirm }: Props) {
+export default function DriverList({
+  drivers, emptyMessage, chosenId, offerStatuses, sendingRideId, onChoose, onBack, onConfirm,
+}: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = makeStyles(colors);
 
   const n = drivers.length;
+  const chosenStatus = chosenId ? offerStatuses[chosenId] : undefined;
 
   return (
     <View style={styles.screen}>
-      <BackButton onPress={onBack} />
-      <MapTitleChip title='Available drivers' />
-
       <ScrollView
         contentContainerStyle={{
           paddingTop: insets.top + 8 + 46 + 18,
@@ -49,15 +53,18 @@ export default function DriverList({ drivers, chosenId, onChoose, onBack, onConf
           paddingHorizontal: 20,
         }}
       >
-        <Text style={styles.count}>
-          {n} driver{n === 1 ? '' : 's'} match{n === 1 ? 'es' : ''} your route
-        </Text>
+        {n > 0 ? (
+          <Text style={styles.count}>
+            {n} driver{n === 1 ? '' : 's'} match{n === 1 ? 'es' : ''} your route
+          </Text>
+        ) : !!emptyMessage && <InlineNotice message={emptyMessage} />}
 
         <View style={styles.list}>
           {drivers.map((d, i) => {
             const avatar = colors.avatars[avatarSlot(i) % colors.avatars.length];
             const x = driverExtras(d);
             const chosen = d.rideId === chosenId;
+            const status = offerStatuses[d.rideId];
             return (
               <Pressable
                 key={d.rideId}
@@ -80,6 +87,7 @@ export default function DriverList({ drivers, chosenId, onChoose, onBack, onConf
                       </Text>
                     </View>
                     <Text style={styles.rating}>Departs {formatDriverDeparture(d.departAt)}</Text>
+                    {status && <Text style={styles.rating}>{offerStatusLabels[status]}</Text>}
                   </View>
                   <Text style={d.fare === null ? styles.rating : styles.price}>{formatDriverFare(d.fare)}</Text>
                 </View>
@@ -90,10 +98,15 @@ export default function DriverList({ drivers, chosenId, onChoose, onBack, onConf
         </View>
       </ScrollView>
 
+      <MapTitleChip title='Available drivers' />
+      <BackButton onPress={onBack} />
+
       {chosenId && (
         <View style={[styles.confirmWrap, { paddingBottom: insets.bottom + 16 }]}>
-          <PressButton style={styles.confirm} onPress={onConfirm}>
-            <Text style={styles.confirmText}>Confirm</Text>
+          <PressButton style={styles.confirm} onPress={onConfirm} disabled={!!chosenStatus || !!sendingRideId}>
+            <Text style={styles.confirmText}>
+              {sendingRideId === chosenId ? 'Sending…' : chosenStatus ? offerStatusLabels[chosenStatus] : 'Send request'}
+            </Text>
           </PressButton>
         </View>
       )}

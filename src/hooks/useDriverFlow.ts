@@ -94,8 +94,9 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     try {
       const shown = tripRef.current;
       if (shown) {
-        if (!(await isTripActive(shown.rideId))) clear();
-        return;
+        if (await isTripActive(shown.rideId)) return;
+        if (tripRef.current !== shown) return;
+        clear();
       }
       const t = await loadActiveTrip(userId);
       if (t) {
@@ -129,13 +130,13 @@ export function useDriverFlow(userId: string | undefined, active = true) {
 
   // Load passengers near the route, and refresh every 10 seconds.
   useEffect(() => {
-    if (!trip) return;
+    if (!trip || !userId) return;
     let cancelled = false;
 
     async function load() {
-      if (!trip) return;
+      if (!trip || !userId) return;
       try {
-        const found = await loadRequests(trip);
+        const found = await loadRequests(trip, userId);
         if (!cancelled) setRequests(found);
       } catch (e) {
         console.error(e);
@@ -148,12 +149,12 @@ export function useDriverFlow(userId: string | undefined, active = true) {
       cancelled = true;
       clearInterval(t);
     };
-  }, [trip]);
+  }, [trip, userId]);
 
   async function respond(req: Req, accept: boolean) {
     if (!trip) return;
     try {
-      await answerRequest(req, accept);
+      await answerRequest(trip.rideId, req.id, accept);
       setRequests((rs) => rs.filter((r) => r.id !== req.id));
       setSelectedId(null);
     } catch (e) {
@@ -176,7 +177,7 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     setSelectedId(null);
   }
 
-  const markers: MapMarker[] = requests.map((r) => ({
+  const markers: MapMarker[] = requests.filter((r) => r.status !== 'accepted').map((r) => ({
     id: r.id,
     point: r.pickup,
     color: '#16a34a',

@@ -20,6 +20,7 @@ export type PreviousTrip = {
   // True when the fare is calculated from the ride's rate instead of a saved price.
   estimated: boolean;
   statusLabel?: string;
+  reopenedRequestId?: string;
 };
 
 const rad = (d: number) => (d * Math.PI) / 180;
@@ -37,7 +38,6 @@ type RequestRow = {
   id: string;
   passengerId: string;
   status: string;
-  selectedRideId: string | null;
   pickupLat: number;
   pickupLng: number;
   dropoffLat: number;
@@ -68,18 +68,24 @@ const fullName = (u: { firstName: string | null; lastName: string | null } | nul
 // Passenger: finished rides they were accepted on.
 async function loadAsRider(userId: string, history: boolean): Promise<PreviousTrip[]> {
   const query = supabase
-    .from('ride_requests')
+    .from('ride_offers')
     .select(
-      `*, rides!inner ( rideId, driverStartLocation, driverEndLocation, departAt, pricePerKm, status,
+      `id, status, fare, cancelledByDriver, ride_requests!inner(*),
+       rides!inner ( rideId, driverStartLocation, driverEndLocation, departAt, pricePerKm, status,
                drivers ( users ( firstName, lastName ) ) )`,
     )
-    .eq('passengerId', userId);
+    .eq('ride_requests.passengerId', userId);
   const { data, error } = await (history
-    ? query.in('status', ['pending', 'accepted', 'declined', 'cancelled'])
+    ? query
     : query.eq('status', 'accepted').eq('rides.status', 'completed'));
   if (error) throw error;
 
-  type Row = RequestRow & {
+  type Row = {
+    id: string;
+    status: string;
+    fare: number | null;
+    cancelledByDriver: boolean;
+    ride_requests: RequestRow;
     rides: {
       driverStartLocation: string;
       driverEndLocation: string;
@@ -96,17 +102,25 @@ async function loadAsRider(userId: string, history: boolean): Promise<PreviousTr
     start: r.rides.driverStartLocation,
     end: r.rides.driverEndLocation,
     departAt: r.rides.departAt,
-    destination: r.dropoffText?.trim() || r.rides.driverEndLocation,
-    destinationPoint: { lat: r.dropoffLat, lng: r.dropoffLng },
+    destination: r.ride_requests.dropoffText?.trim() || r.rides.driverEndLocation,
+    destinationPoint: { lat: r.ride_requests.dropoffLat, lng: r.ride_requests.dropoffLng },
     otherName: fullName(r.rides.drivers?.users, 'Driver'),
-    statusLabel: history ? historyLabel(r.rides.status, r.status) : undefined,
-    ...priceOf(r, r.rides.pricePerKm),
+    statusLabel: history
+      ? r.cancelledByDriver ? 'Cancelled by driver' : historyLabel(r.rides.status, r.status)
+      : undefined,
+    reopenedRequestId: history && r.cancelledByDriver && r.ride_requests.status === 'open'
+      ? r.ride_requests.id : undefined,
+    ...priceOf({
+      ...r.ride_requests,
+      price: r.fare ?? (r.status === 'accepted' ? r.ride_requests.price : null),
+    }, r.rides.pricePerKm),
   }));
 }
 
 function historyLabel(rideStatus: string, requestStatus?: string) {
   if (rideStatus === 'cancelled' || requestStatus === 'cancelled') return 'Cancelled';
   if (requestStatus === 'declined') return 'Declined';
+  if (requestStatus === 'taken') return 'Closed';
   if (requestStatus === 'pending') return 'Pending';
   if (rideStatus === 'completed') return 'Completed';
   return rideStatus === 'in_progress' ? 'In progress' : 'Pending';
@@ -123,30 +137,32 @@ async function loadAsDriver(userId: string, history: boolean): Promise<PreviousT
   if (!rides?.length) return [];
 
   const requestsQuery = supabase
-    .from('ride_requests')
-    .select('*')
-    .in('selectedRideId', rides.map((r) => r.rideId));
+    .from('ride_offers')
+    .select('id, rideId, status, fare, ride_requests!inner(*)')
+    .in('rideId', rides.map((r) => r.rideId));
   const { data: reqs, error: reqError } = await (history
-    ? requestsQuery.in('status', ['pending', 'accepted', 'cancelled']).order('created_at', { ascending: false })
+    ? requestsQuery.in('status', ['pending', 'accepted', 'cancelled']).order('createdAt', { ascending: false })
     : requestsQuery.eq('status', 'accepted'));
   if (reqError) throw reqError;
-  const accepted = (reqs ?? []) as RequestRow[];
-  const ids = [...new Set(accepted.map((r) => r.passengerId))];
+  type LinkedOffer = { id: string; rideId: string; status: string; fare: number | null; ride_requests: RequestRow };
+  const linked = (reqs ?? []) as unknown as LinkedOffer[];
+  const ids = [...new Set(linked.map((offer) => offer.ride_requests.passengerId))];
   const { data: people } = ids.length ? await supabase
     .from('users')
     .select('userId, firstName, lastName')
     .in('userId', ids) : { data: [] };
 
   return rides.flatMap((ride) => {
-    const requests: (RequestRow | null)[] = accepted.filter((r) => r.selectedRideId === ride.rideId);
+    const requests: (LinkedOffer | null)[] = linked.filter((offer) => offer.rideId === ride.rideId);
     if (history) {
       const passenger = requests.find((request) => request?.status === 'accepted') ?? requests[0];
       requests.splice(0, requests.length, passenger ?? null);
     }
-    return requests.map((r) => {
+    return requests.map((offer) => {
+      const r = offer?.ride_requests;
       const person = r && people?.find((u) => u.userId === r.passengerId);
       return {
-        key: r ? `driver-${r.id}` : `driver-ride-${ride.rideId}`,
+        key: offer ? `driver-${offer.id}` : `driver-ride-${ride.rideId}`,
         role: 'driver' as const,
         start: ride.driverStartLocation,
         end: ride.driverEndLocation,
@@ -156,7 +172,9 @@ async function loadAsDriver(userId: string, history: boolean): Promise<PreviousT
           ride.endLat != null && ride.endLng != null ? { lat: ride.endLat, lng: ride.endLng } : null,
         otherName: r ? fullName(person || null, 'Passenger') : null,
         statusLabel: history ? historyLabel(ride.status) : undefined,
-        ...(r ? priceOf(r, ride.pricePerKm) : { price: null, estimated: false }),
+        ...(r ? priceOf({
+          ...r, price: offer?.fare ?? (offer?.status === 'accepted' ? r.price : null),
+        }, ride.pricePerKm) : { price: null, estimated: false }),
       };
     });
   });

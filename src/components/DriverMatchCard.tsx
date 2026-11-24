@@ -1,6 +1,6 @@
 import VehicleBox from '@/components/VehicleBox';
 import { driverExtras, formatDriverDeparture, formatDriverFare } from '@/lib/driverExtras';
-import type { Result } from '@/lib/rides';
+import { offerStatusLabels, type OfferStatus, type Result } from '@/lib/rides';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
@@ -12,6 +12,8 @@ import PressButton from '@/components/PressButton';
 type Props = {
   driver: Result;
   avatarIndex: number;
+  offerStatus?: OfferStatus;
+  sending: boolean;
   // True when other drivers exist; otherwise the left button is "Cancel".
   hasOthers: boolean;
   onSeeOthers: () => void;
@@ -70,10 +72,16 @@ export default function DriverMatchCard(p: Props) {
 
       <View style={styles.buttons}>
         <PressButton ghost style={[styles.button, styles.ghost]} onPress={p.hasOthers ? p.onSeeOthers : p.onCancel}>
-          <Text style={styles.ghostText}>{p.hasOthers ? 'See others' : 'Cancel'}</Text>
+          <Text style={styles.ghostText}>{p.hasOthers ? 'See others' : p.offerStatus ? 'Back' : 'Cancel'}</Text>
         </PressButton>
-        <PressButton style={[styles.button, { backgroundColor: colors.brand }]} onPress={p.onConfirm}>
-          <Text style={[styles.buttonText, { color: colors.onBrand }]}>Confirm</Text>
+        <PressButton
+          style={[styles.button, { backgroundColor: colors.brand }]}
+          onPress={p.onConfirm}
+          disabled={p.sending || !!p.offerStatus}
+        >
+          <Text style={[styles.buttonText, { color: colors.onBrand }]}>
+            {p.sending ? 'Sending…' : p.offerStatus ? offerStatusLabels[p.offerStatus] : 'Send request'}
+          </Text>
         </PressButton>
       </View>
     </View>

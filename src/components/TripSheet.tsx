@@ -104,9 +104,11 @@ export default function TripSheet(p: Props) {
         </View>
 
         <View style={styles.row}>
-          <PressButton style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onDecline}>
-            <Text style={[styles.buttonText, { color: colors.onAlert }]}>Decline</Text>
-          </PressButton>
+          {r.status === 'pending' && (
+            <PressButton style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onDecline}>
+              <Text style={[styles.buttonText, { color: colors.onAlert }]}>Decline</Text>
+            </PressButton>
+          )}
           <PressButton style={[styles.button, { backgroundColor: colors.brand }]} onPress={p.onAccept}>
             <Text style={[styles.buttonText, { color: colors.onBrand }]}>Accept</Text>
           </PressButton>

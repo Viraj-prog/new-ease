@@ -28,11 +28,13 @@ export default function PreviousTripCard({
   trip,
   avatarIndex,
   onRedo,
+  onFindAnother,
 }: {
   trip: PreviousTrip;
   avatarIndex: number;
   // Opens the route preview for the same start and end.
   onRedo: () => void;
+  onFindAnother?: () => void;
 }) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
@@ -70,6 +72,11 @@ export default function PreviousTripCard({
           <Text style={styles.redoText}>Redo</Text>
         </PressButton>
       </View>
+      {onFindAnother && (
+        <PressButton style={styles.redo} onPress={onFindAnother}>
+          <Text style={styles.redoText}>Find another driver</Text>
+        </PressButton>
+      )}
     </View>
   );
 }

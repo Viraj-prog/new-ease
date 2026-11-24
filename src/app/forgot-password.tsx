@@ -1,9 +1,9 @@
-import { AuthPage, Field, SubmitButton } from '@/components/AuthForm';
+import { AuthPage, backToLogin, Field, SubmitButton } from '@/components/AuthForm';
 import { errText } from '@/lib/places';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/styles/global';
 import * as Linking from 'expo-linking';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, StyleSheet, Text } from 'react-native';
 import { useNotify } from '@/lib/notify';
@@ -30,7 +30,7 @@ export default function ForgotPasswordScreen() {
       Alert.alert(
         'Check your inbox',
         'If an account exists for that email, we sent a link to reset your password.',
-        [{ text: 'OK', onPress: () => router.back() }]
+        [{ text: 'OK', onPress: backToLogin }]
       );
     } catch (err) {
       notify({ kind: 'alert', title: 'Could not send reset email', subtitle: errText(err) });

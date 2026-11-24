@@ -10,7 +10,6 @@ import InteractiveMap, { type MapMarker } from '@/components/map';
 import MapTitleChip from '@/components/MapTitleChip';
 import MenuButton from '@/components/MenuButton';
 import PlanForm from '@/components/PlanForm';
-import RideStatusPopup from '@/components/RideStatusPopup';
 import RoutePreview from '@/components/RoutePreview';
 import SearchPill from '@/components/SearchPill';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -32,9 +31,10 @@ import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
 import BottomSheet, { BottomSheetScrollView, useBottomSheetSpringConfigs } from '@gorhom/bottom-sheet';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
-import { type DrawerNavigationProp } from 'expo-router/drawer';
+import { useDrawerStatus, type DrawerNavigationProp } from 'expo-router/drawer';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  BackHandler,
   Keyboard,
   PermissionsAndroid,
   Platform,
@@ -102,6 +102,7 @@ export default function HomeScreen() {
 
   // Rider: "See others" has opened the full list; otherwise only the best match is shown.
   const [listOpen, setListOpen] = useState(false);
+  const [reopenedSearch, setReopenedSearch] = useState(false);
   // Notifications (errors and confirmations) are shown by the app-wide banner.
   const notify = useNotify();
 
@@ -127,6 +128,9 @@ export default function HomeScreen() {
 
   const passenger = usePassengerFlow(userId, onBooked);
   const driver = useDriverFlow(userId, driverMode);
+  const drawerStatus = useDrawerStatus();
+  const clearPassenger = passenger.clear;
+  const clearDriver = driver.clear;
   const places = useSavedTrips(userId);
 
   // Passenger view drops any trip being shown. (Driver view re-checks it when Home opens.)
@@ -318,15 +322,29 @@ export default function HomeScreen() {
   }
 
   // The Previous Trips tab sends a trip here to redo. It is read once, then cleared.
-  const redoParams = useLocalSearchParams<{ redo?: string; from?: string; to?: string; role?: string }>();
+  const redoParams = useLocalSearchParams<{
+    redo?: string; from?: string; to?: string; role?: string; resumeRequest?: string;
+  }>();
   useFocusEffect(
     useCallback(() => {
+      if (redoParams.resumeRequest) {
+        const requestId = redoParams.resumeRequest;
+        router.setParams({ resumeRequest: undefined });
+        setPreview(null);
+        setChosenId(null);
+        setListOpen(true);
+        setReopenedSearch(true);
+        setView('plan');
+        if (driverMode) void choose(false);
+        void passenger.resume(requestId);
+        return;
+      }
       if (!redoParams.redo || !redoParams.to) return;
       const { from, to, role } = redoParams;
       router.setParams({ redo: undefined, from: undefined, to: undefined, role: undefined });
       redoTrip(from ?? '', to, role !== 'rider');
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [redoParams.redo]),
+    }, [redoParams.redo, redoParams.resumeRequest]),
   );
 
   // Post the trip being previewed. The preview goes away once it is posted.
@@ -343,24 +361,26 @@ export default function HomeScreen() {
 
   const active = !!driver.trip || passenger.results.length > 0 || !!passenger.msg || !!driver.msg;
   // Empty the form and anything it produced, leaving the sheet where it is.
-  function clearFields() {
-    passenger.clear();
-    driver.clear();
+  const clearFields = useCallback(() => {
+    setReopenedSearch(false);
+    setListOpen(false);
+    clearPassenger();
+    clearDriver();
     setChosenId(null);
     setPreview(null);
     setPickup('');
     setDestination('');
-  }
+  }, [clearDriver, clearPassenger]);
   // Same, but also closes the keyboard and lowers the sheet (used when leaving the plan view).
-  function clearAll() {
+  const clearAll = useCallback(() => {
     Keyboard.dismiss();
     clearFields();
     sheetRef.current?.snapToIndex(SNAP.MID);
-  }
+  }, [clearFields]);
 
   // Rider: the list of matching drivers replaces everything else.
   const hasResults = !driverMode && passenger.results.length > 0;
-  const showResults = hasResults && listOpen;
+  const showResults = !driverMode && listOpen && (hasResults || reopenedSearch);
   // The best match is shown over the preview; "See others" opens the full list.
   const showMatch = hasResults && !listOpen;
   const best = passenger.results[0];
@@ -372,28 +392,24 @@ export default function HomeScreen() {
   const showPlan = view === 'plan' || active || showPreview;
 
   // Back from the driver list returns to the route preview.
-  function backToPreview() {
-    passenger.clear();
+  const backToPreview = useCallback(() => {
+    clearPassenger();
     setChosenId(null);
     setListOpen(false);
-  }
+  }, [clearPassenger]);
 
   // Confirm on the best match card.
-  function confirmBest() {
-    if (best) passenger.request(best);
+  async function confirmBest() {
+    if (best && await passenger.request(best) && passenger.results.length > 1) {
+      setChosenId(null);
+      setListOpen(true);
+    }
   }
 
-  // Confirm on the driver list: ask the chosen driver. The "Confirming Ride" popup takes over.
+  // Stay in the driver list so the passenger can send more offers for the same request.
   function confirmDriver() {
     const r = passenger.results.find((x) => x.rideId === chosenId);
     if (r) passenger.request(r);
-  }
-
-  // Closing the "Ride Accepted" notice ends the booking flow and goes home.
-  function closeNotice() {
-    const accepted = passenger.notice === 'accepted';
-    passenger.closeNotice();
-    if (accepted) closePlan();
   }
 
   function openPlan(place?: string) {
@@ -406,6 +422,40 @@ export default function HomeScreen() {
     clearAll();
     setView('home');
   }
+
+  const backFromDrivers = useCallback(() => {
+    setListOpen(false);
+    if (reopenedSearch) {
+      clearAll();
+      setView('home');
+      router.navigate('/rides');
+      return;
+    }
+    setChosenId(null);
+  }, [clearAll, reopenedSearch]);
+
+  const backFromPreview = useCallback(() => {
+    setPreview(null);
+    sheetRef.current?.snapToIndex(SNAP.FULL);
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (drawerStatus === 'open') return false;
+      if (navigating) setNavigating(false);
+      else if (showResults) backFromDrivers();
+      else if (showMatch) backToPreview();
+      else if (showPreview) backFromPreview();
+      else if (showPlan && !showTrip) {
+        clearAll();
+        setView('home');
+      }
+      else return false;
+      return true;
+    });
+    return () => subscription.remove();
+  }, [backFromDrivers, backFromPreview, backToPreview, clearAll, drawerStatus,
+    navigating, showMatch, showPlan, showPreview, showResults, showTrip]));
 
   // Driver answered a request. After accepting, look up who is booked.
   async function answer(accept: boolean) {
@@ -486,12 +536,12 @@ export default function HomeScreen() {
       ) : showResults ? (
         <DriverList
           drivers={passenger.results}
+          emptyMessage={reopenedSearch && !passenger.loading ? passenger.msg : undefined}
           chosenId={chosenId}
+          offerStatuses={passenger.offerStatuses}
+          sendingRideId={passenger.sendingRideId}
           onChoose={setChosenId}
-          onBack={() => {
-            setChosenId(null);
-            setListOpen(false);
-          }}
+          onBack={backFromDrivers}
           onConfirm={confirmDriver}
         />
       ) : (
@@ -500,17 +550,7 @@ export default function HomeScreen() {
           {showPlan && !showTrip && !showPreview && (
             <View pointerEvents='none' style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }]} />
           )}
-          {showPreview ? (
-            <BackButton
-              onPress={() => {
-                setPreview(null);
-                // Back to the form with the sheet still fully open.
-                sheetRef.current?.snapToIndex(SNAP.FULL);
-              }}
-            />
-          ) : (
-            (!showPlan || showTrip) && <MenuButton onPress={() => navigation.openDrawer()} />
-          )}
+          {!showPreview && (!showPlan || showTrip) && <MenuButton onPress={() => navigation.openDrawer()} />}
           {showTrip && <MapTitleChip title={tripTitle(driver.popup, bookedNow)} />}
           {showPreview && <MapTitleChip title='Your route' />}
 
@@ -625,6 +665,8 @@ export default function HomeScreen() {
               ]}>
               <DriverMatchCard
                 driver={best}
+                offerStatus={passenger.offerStatuses[best.rideId]}
+                sending={passenger.sendingRideId === best.rideId}
                 avatarIndex={avatarSlot(Math.max(0, passenger.results.indexOf(best)))}
                 hasOthers={passenger.results.length > 1}
                 onSeeOthers={() => setListOpen(true)}
@@ -633,6 +675,8 @@ export default function HomeScreen() {
               />
             </View>
           )}
+
+          {showPreview && <BackButton onPress={showMatch ? backToPreview : backFromPreview} />}
 
           {/* Post trip / Find driver problems: a card above the sheet, outside it. */}
           {showPreview && !!message && !showMatch && (
@@ -667,21 +711,13 @@ export default function HomeScreen() {
       />
 
 
-      <RideStatusPopup
-        driverName={passenger.results.find((x) => x.rideId === passenger.sentTo)?.driverName}
-        confirming={passenger.confirming}
-        notice={passenger.notice}
-        onCancel={passenger.cancel}
-        onClose={closeNotice}
-      />
-
       <ConfirmDialog
         visible={confirmCancel}
         title='Are you sure?'
         message={
           bookedNow
-            ? 'Your booked passenger will lose this ride, and your trip will be cancelled and removed from rider search.'
-            : 'Your posted trip will be cancelled and removed from rider search.'
+            ? 'Accepted passengers will return to searching. This ride will move to History.'
+            : 'This ride will move to History and any pending offers will close.'
         }
         busy={cancelling}
         onYes={cancelTrip}

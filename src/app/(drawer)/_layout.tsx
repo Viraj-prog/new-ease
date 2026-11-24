@@ -2,7 +2,9 @@ import Icon from '@/components/Icon';
 import LogoutPopup from '@/components/LogoutPopup';
 import SegmentedToggle from '@/components/SegmentedToggle';
 import { useProfile } from '@/hooks/useProfile';
+import { useDriverCancellationNotice } from '@/hooks/useDriverCancellationNotice';
 import { useRoleSwitch } from '@/hooks/useRoleSwitch';
+import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
@@ -118,6 +120,8 @@ function DrawerContent(props: DrawerContentComponentProps) {
 
 export default function DrawerLayout() {
   const { colors } = useTheme();
+  const { session } = useAuth();
+  useDriverCancellationNotice(session?.user.id);
 
   return (
     <Drawer

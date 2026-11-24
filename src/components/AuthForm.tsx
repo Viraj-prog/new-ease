@@ -1,10 +1,11 @@
 import { colors } from '@/styles/global';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
-import { createContext, useContext } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { createContext, useCallback, useContext } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -46,9 +47,22 @@ export function AuthCard({ children }: { children: React.ReactNode }) {
   );
 }
 
+export function backToLogin() {
+  if (router.canGoBack()) router.back();
+  else router.replace('/login');
+}
+
 // White screen with a back button (sign up, reset email).
 export function AuthPage({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
+  useFocusEffect(useCallback(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      backToLogin();
+      return true;
+    });
+    return () => subscription.remove();
+  }, []));
+
   return (
     <LookContext.Provider value='page'>
       <KeyboardAvoidingView style={styles.pageScreen} behavior={keyboardBehavior}>
@@ -61,7 +75,9 @@ export function AuthPage({ children }: { children: React.ReactNode }) {
 
         <Pressable
           style={[styles.back, { top: insets.top + 8 }]}
-          onPress={() => router.back()}
+          accessibilityRole='button'
+          accessibilityLabel='Back'
+          onPress={backToLogin}
           hitSlop={8}
         >
           <Image

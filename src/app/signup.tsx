@@ -1,4 +1,4 @@
-import { AuthPage, Field, SubmitButton } from '@/components/AuthForm';
+import { AuthPage, backToLogin, Field, SubmitButton } from '@/components/AuthForm';
 import { passwordProblem } from '@/lib/password';
 import { errText } from '@/lib/places';
 import { supabase } from '@/lib/supabase';
@@ -45,7 +45,7 @@ export default function SignUpScreen() {
       // With email confirmation enabled there is no session until they confirm.
       if (!data.session || !data.user) {
         Alert.alert('Almost there', 'Check your inbox to confirm your email, then log in.');
-        router.back();
+        backToLogin();
         return;
       }
 

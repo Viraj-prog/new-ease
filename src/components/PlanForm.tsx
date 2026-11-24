@@ -91,7 +91,7 @@ export default function PlanForm(p: Props) {
     <View>
       <View style={styles.header}>
         {p.onBack && (
-          <Pressable onPress={p.onBack} hitSlop={10}>
+          <Pressable accessibilityRole='button' accessibilityLabel='Back' onPress={p.onBack} hitSlop={10}>
             <Icon name='arrow-left' color={colors.text} />
           </Pressable>
         )}
