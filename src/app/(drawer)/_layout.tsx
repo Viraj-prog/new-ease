@@ -10,6 +10,7 @@ import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
 import { Drawer, type DrawerContentComponentProps } from 'expo-router/drawer';
+import { usePathname } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -120,8 +121,9 @@ function DrawerContent(props: DrawerContentComponentProps) {
 
 export default function DrawerLayout() {
   const { colors } = useTheme();
-  const { session } = useAuth();
-  useDriverCancellationNotice(session?.user.id);
+  const { session, driverMode } = useAuth();
+  const pathname = usePathname();
+  useDriverCancellationNotice(pathname === '/' && !driverMode ? undefined : session?.user.id);
 
   return (
     <Drawer

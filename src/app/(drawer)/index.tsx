@@ -19,6 +19,7 @@ import { useDriverFlow } from '@/hooks/useDriverFlow';
 import { haversineKm } from '@/lib/previousTrips';
 import { useSavedTrips } from '@/hooks/useSavedTrips';
 import { usePassengerFlow } from '@/hooks/usePassengerFlow';
+import { useReopenedPassengerSearch, type ReopenedSearch } from '@/hooks/useReopenedPassengerSearch';
 import { useRoleSwitch } from '@/hooks/useRoleSwitch';
 import { useAuth } from '@/lib/auth';
 import type { Pt } from '@/lib/geo';
@@ -103,6 +104,8 @@ export default function HomeScreen() {
   // Rider: "See others" has opened the full list; otherwise only the best match is shown.
   const [listOpen, setListOpen] = useState(false);
   const [reopenedSearch, setReopenedSearch] = useState(false);
+  const [manualRecoveryId, setManualRecoveryId] = useState<string | null>(null);
+  const [automaticSearch, setAutomaticSearch] = useState<ReopenedSearch | null>(null);
   // Notifications (errors and confirmations) are shown by the app-wide banner.
   const notify = useNotify();
 
@@ -132,6 +135,17 @@ export default function HomeScreen() {
   const clearPassenger = passenger.clear;
   const clearDriver = driver.clear;
   const places = useSavedTrips(userId);
+  const rememberRecovery = useReopenedPassengerSearch(
+    userId,
+    !driverMode && view === 'home' && !automaticSearch && !reopenedSearch && !passenger.loading,
+    (search) => {
+      setAutomaticSearch(search);
+      setChosenId(null);
+      setListOpen(false);
+      setPreview(null);
+      void passenger.resume(search.requestId);
+    },
+  );
 
   // Passenger view drops any trip being shown. (Driver view re-checks it when Home opens.)
   useEffect(() => {
@@ -202,6 +216,10 @@ export default function HomeScreen() {
   // Rider: look for drivers on the previewed route. The list takes over the screen when found.
   async function onFind() {
     Keyboard.dismiss();
+    const recoveryId = automaticSearch?.id ?? manualRecoveryId;
+    if (recoveryId) rememberRecovery(recoveryId, 'handled');
+    setAutomaticSearch(null);
+    setManualRecoveryId(null);
     driver.clear();
     setChosenId(null);
     setListOpen(false);
@@ -323,14 +341,16 @@ export default function HomeScreen() {
 
   // The Previous Trips tab sends a trip here to redo. It is read once, then cleared.
   const redoParams = useLocalSearchParams<{
-    redo?: string; from?: string; to?: string; role?: string; resumeRequest?: string;
+    redo?: string; from?: string; to?: string; role?: string; resumeRequest?: string; resumeOffer?: string;
   }>();
   useFocusEffect(
     useCallback(() => {
       if (redoParams.resumeRequest) {
         const requestId = redoParams.resumeRequest;
-        router.setParams({ resumeRequest: undefined });
+        router.setParams({ resumeRequest: undefined, resumeOffer: undefined });
         setPreview(null);
+        setAutomaticSearch(null);
+        setManualRecoveryId(redoParams.resumeOffer ?? null);
         setChosenId(null);
         setListOpen(true);
         setReopenedSearch(true);
@@ -362,6 +382,8 @@ export default function HomeScreen() {
   const active = !!driver.trip || passenger.results.length > 0 || !!passenger.msg || !!driver.msg;
   // Empty the form and anything it produced, leaving the sheet where it is.
   const clearFields = useCallback(() => {
+    setAutomaticSearch(null);
+    setManualRecoveryId(null);
     setReopenedSearch(false);
     setListOpen(false);
     clearPassenger();
@@ -380,7 +402,9 @@ export default function HomeScreen() {
 
   // Rider: the list of matching drivers replaces everything else.
   const hasResults = !driverMode && passenger.results.length > 0;
-  const showResults = !driverMode && listOpen && (hasResults || reopenedSearch);
+  const showResults = !driverMode && (
+    (listOpen && (hasResults || reopenedSearch)) || (!!automaticSearch && !hasResults)
+  );
   // The best match is shown over the preview; "See others" opens the full list.
   const showMatch = hasResults && !listOpen;
   const best = passenger.results[0];
@@ -400,16 +424,28 @@ export default function HomeScreen() {
 
   // Confirm on the best match card.
   async function confirmBest() {
-    if (best && await passenger.request(best) && passenger.results.length > 1) {
+    if (!best || !(await sendPassengerOffer(best))) return;
+    if (passenger.results.length > 1) {
       setChosenId(null);
       setListOpen(true);
     }
   }
 
+  async function sendPassengerOffer(ride: (typeof passenger.results)[number]) {
+    const sent = await passenger.request(ride);
+    const recoveryId = automaticSearch?.id ?? manualRecoveryId;
+    if (sent && recoveryId) rememberRecovery(recoveryId, 'handled');
+    if (sent && automaticSearch) {
+      setAutomaticSearch((current) => current?.id === automaticSearch.id
+        ? { ...current, showNotice: false } : current);
+    }
+    return sent;
+  }
+
   // Stay in the driver list so the passenger can send more offers for the same request.
   function confirmDriver() {
     const r = passenger.results.find((x) => x.rideId === chosenId);
-    if (r) passenger.request(r);
+    if (r) void sendPassengerOffer(r);
   }
 
   function openPlan(place?: string) {
@@ -423,6 +459,22 @@ export default function HomeScreen() {
     setView('home');
   }
 
+  const leaveAutomaticSearch = useCallback(() => {
+    if (automaticSearch) rememberRecovery(automaticSearch.id, 'handled');
+    clearAll();
+    setView('home');
+  }, [automaticSearch, clearAll, rememberRecovery]);
+
+  function dismissRecoveryNotice() {
+    if (!automaticSearch) return;
+    rememberRecovery(automaticSearch.id, 'dismissed');
+    setAutomaticSearch({ ...automaticSearch, showNotice: false });
+  }
+
+  const recoveryNotice = automaticSearch?.showNotice ? (
+    <InlineNotice message='Your driver cancelled, we’re searching again' onDismiss={dismissRecoveryNotice} />
+  ) : null;
+
   const backFromDrivers = useCallback(() => {
     setListOpen(false);
     if (reopenedSearch) {
@@ -431,8 +483,12 @@ export default function HomeScreen() {
       router.navigate('/rides');
       return;
     }
+    if (automaticSearch && !hasResults) {
+      leaveAutomaticSearch();
+      return;
+    }
     setChosenId(null);
-  }, [clearAll, reopenedSearch]);
+  }, [automaticSearch, clearAll, hasResults, leaveAutomaticSearch, reopenedSearch]);
 
   const backFromPreview = useCallback(() => {
     setPreview(null);
@@ -444,7 +500,10 @@ export default function HomeScreen() {
       if (drawerStatus === 'open') return false;
       if (navigating) setNavigating(false);
       else if (showResults) backFromDrivers();
-      else if (showMatch) backToPreview();
+      else if (showMatch) {
+        if (automaticSearch) leaveAutomaticSearch();
+        else backToPreview();
+      }
       else if (showPreview) backFromPreview();
       else if (showPlan && !showTrip) {
         clearAll();
@@ -454,7 +513,7 @@ export default function HomeScreen() {
       return true;
     });
     return () => subscription.remove();
-  }, [backFromDrivers, backFromPreview, backToPreview, clearAll, drawerStatus,
+  }, [automaticSearch, backFromDrivers, backFromPreview, backToPreview, clearAll, drawerStatus, leaveAutomaticSearch,
     navigating, showMatch, showPlan, showPreview, showResults, showTrip]));
 
   // Driver answered a request. After accepting, look up who is booked.
@@ -536,7 +595,9 @@ export default function HomeScreen() {
       ) : showResults ? (
         <DriverList
           drivers={passenger.results}
-          emptyMessage={reopenedSearch && !passenger.loading ? passenger.msg : undefined}
+          emptyMessage={(reopenedSearch || automaticSearch) && !passenger.loading ? passenger.msg : undefined}
+          notice={recoveryNotice}
+          onRetry={automaticSearch ? () => void passenger.resume(automaticSearch.requestId) : undefined}
           chosenId={chosenId}
           offerStatuses={passenger.offerStatuses}
           sendingRideId={passenger.sendingRideId}
@@ -661,8 +722,10 @@ export default function HomeScreen() {
                   justifyContent: 'flex-end',
                   paddingHorizontal: 20,
                   paddingBottom: windowHeight * 0.3,
+                  gap: 10,
                 },
               ]}>
+              {recoveryNotice}
               <DriverMatchCard
                 driver={best}
                 offerStatus={passenger.offerStatuses[best.rideId]}
@@ -670,13 +733,14 @@ export default function HomeScreen() {
                 avatarIndex={avatarSlot(Math.max(0, passenger.results.indexOf(best)))}
                 hasOthers={passenger.results.length > 1}
                 onSeeOthers={() => setListOpen(true)}
-                onCancel={backToPreview}
+                onCancel={automaticSearch ? leaveAutomaticSearch : backToPreview}
                 onConfirm={confirmBest}
               />
             </View>
           )}
 
           {showPreview && <BackButton onPress={showMatch ? backToPreview : backFromPreview} />}
+          {automaticSearch && showMatch && <BackButton onPress={leaveAutomaticSearch} />}
 
           {/* Post trip / Find driver problems: a card above the sheet, outside it. */}
           {showPreview && !!message && !showMatch && (

@@ -26,7 +26,14 @@ export function useDriverCancellationNotice(userId: string | undefined) {
         }
         const ids = await loadDriverCancelledOfferIds(passengerId);
         if (disposed) return;
-        const unseen = ids.filter((id) => !seen?.has(id));
+        const unseen: string[] = [];
+        for (const id of ids) {
+          if (seen.has(id)) continue;
+          const homeDisposition = await secureStorage.getItem(`reopenedSearch.${passengerId}.${id}`);
+          if (homeDisposition) seen.add(id);
+          else unseen.push(id);
+        }
+        if (disposed) return;
         if (!unseen.length) return;
 
         notify({

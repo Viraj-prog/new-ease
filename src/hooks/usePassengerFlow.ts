@@ -123,7 +123,7 @@ export function usePassengerFlow(userId: string | undefined, onAccepted?: (drive
       setPickup(from);
       setDropoff(to);
       setResults(list);
-      if (!list.length) setMsg('No other drivers match your original route and date. You can start a new search.');
+      if (!list.length) setMsg('No other drivers are available right now');
       return list.length ? 'found' : 'none';
     } catch (error) {
       setMsg(errText(error));

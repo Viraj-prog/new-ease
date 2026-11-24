@@ -167,7 +167,7 @@ export default function RidesScreen() {
                       onRedo={() => redo(trip)}
                       onFindAnother={trip.reopenedRequestId ? () => router.navigate({
                         pathname: '/',
-                        params: { resumeRequest: trip.reopenedRequestId },
+                        params: { resumeRequest: trip.reopenedRequestId, resumeOffer: trip.reopenedOfferId },
                       }) : undefined}
                     />
                   ))}
