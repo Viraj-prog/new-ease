@@ -4,8 +4,10 @@ import {
   cancelBooking,
   cancelPostedRide,
   loadBookedRides,
+  loadOpenSearches,
   loadPostedRides,
   type BookedRide,
+  type OpenSearch,
   type PostedRide,
 } from '@/lib/rides';
 import { useFocusEffect } from 'expo-router';
@@ -15,6 +17,7 @@ import { useCallback, useState } from 'react';
 export function useMyRides(userId: string | undefined, watchBookings: boolean) {
   const [posted, setPosted] = useState<PostedRide[]>([]);
   const [booked, setBooked] = useState<BookedRide[]>([]);
+  const [searches, setSearches] = useState<OpenSearch[]>([]);
   const [history, setHistory] = useState<PreviousTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -22,13 +25,15 @@ export function useMyRides(userId: string | undefined, watchBookings: boolean) {
   const reload = useCallback(async () => {
     if (!userId) return;
     try {
-      const [p, b, historyCards] = await Promise.all([
+      const [p, b, s, historyCards] = await Promise.all([
         loadPostedRides(userId),
         loadBookedRides(userId),
+        loadOpenSearches(userId),
         loadRideHistory(userId),
       ]);
       setPosted(p);
       setBooked(b);
+      setSearches(s);
       setHistory(historyCards);
       setError('');
     } catch (e) {
@@ -50,8 +55,11 @@ export function useMyRides(userId: string | undefined, watchBookings: boolean) {
         if (checking) return;
         checking = true;
         try {
-          const rows = await loadBookedRides(userId);
-          if (active) setBooked(rows);
+          const [rows, open] = await Promise.all([loadBookedRides(userId), loadOpenSearches(userId)]);
+          if (active) {
+            setBooked(rows);
+            setSearches(open);
+          }
         } catch (e) {
           console.warn('Could not refresh bookings', errText(e));
         } finally {
@@ -88,5 +96,5 @@ export function useMyRides(userId: string | undefined, watchBookings: boolean) {
     }
   }
 
-  return { posted, booked, history, loading, error, reload, cancelPosted, cancelBooked };
+  return { posted, booked, searches, history, loading, error, reload, cancelPosted, cancelBooked };
 }

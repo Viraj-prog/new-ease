@@ -1,4 +1,5 @@
 import MenuButton from '@/components/MenuButton';
+import PendingCard from '@/components/PendingCard';
 import PersonPopup, { type Person } from '@/components/PersonPopup';
 import RideBox from '@/components/RideBox';
 import SegmentedToggle, { type ToggleOption } from '@/components/SegmentedToggle';
@@ -72,7 +73,7 @@ export default function RidesScreen() {
   const notify = useNotify();
   const { session, driverMode } = useAuth();
   const [tab, setTab] = useState<RideTab>('pending');
-  const { posted, booked, history, loading, error, reload, cancelPosted, cancelBooked } =
+  const { posted, booked, searches, history, loading, error, reload, cancelPosted, cancelBooked } =
     useMyRides(session?.user.id, !driverMode && tab === 'pending');
   const redoCount = useRef(0);
   const [person, setPerson] = useState<Person | null>(null);
@@ -85,11 +86,16 @@ export default function RidesScreen() {
   }
 
   // Ask first, then cancel; show the reason if the database refuses.
-  function confirmCancel(title: string, message: string, run: () => Promise<string | null>) {
+  function confirmCancel(
+    title: string,
+    message: string,
+    run: () => Promise<string | null>,
+    yes = 'Cancel ride',
+  ) {
     Alert.alert(title, message, [
-      { text: 'Keep ride', style: 'cancel' },
+      { text: yes === 'Cancel ride' ? 'Keep ride' : 'Keep it', style: 'cancel' },
       {
-        text: 'Cancel ride',
+        text: yes,
         style: 'destructive',
         onPress: async () => {
           const problem = await run();
@@ -213,6 +219,42 @@ export default function RidesScreen() {
                 )
             ) : (
               <>
+                {searches.length > 0 && (
+                  <>
+                    <Text style={styles.section}>Your searches</Text>
+                    <View style={styles.list}>
+                      {searches.map((search) => (
+                        <PendingCard
+                          key={search.requestId}
+                          role='rider'
+                          status='searching'
+                          title={search.destination ?? 'Your search'}
+                          when={whenText(search.departAt)}
+                          actions={[
+                            {
+                              label: 'Find drivers',
+                              kind: 'main',
+                              onPress: () => router.navigate({
+                                pathname: '/',
+                                params: { resumeRequest: search.requestId },
+                              }),
+                            },
+                            {
+                              label: 'Cancel search',
+                              kind: 'danger',
+                              onPress: () => confirmCancel(
+                                'Cancel this search?',
+                                'Drivers will no longer see you or be able to book you.',
+                                () => cancelBooked(search.requestId),
+                                'Cancel search',
+                              ),
+                            },
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  </>
+                )}
                 <Text style={styles.section}>Booked rides</Text>
                 {currentBookings.length > 0
                   ? <View style={styles.list}>{currentBookings.map(renderBooking)}</View>

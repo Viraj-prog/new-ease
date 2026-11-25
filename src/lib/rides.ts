@@ -860,6 +860,32 @@ export async function loadBookedRides(passengerId: string): Promise<BookedRide[]
   return list;
 }
 
+// A rider's search with no request waiting on any driver: it is still visible to drivers, who
+// can accept it directly.
+export type OpenSearch = { requestId: string; destination: string | null; departAt: string | null };
+
+export async function loadOpenSearches(passengerId: string): Promise<OpenSearch[]> {
+  const { data, error } = await supabase
+    .from('ride_requests')
+    .select('id, departAt, dropoffText, ride_offers(status)')
+    .eq('passengerId', passengerId)
+    .eq('status', 'open')
+    .is('acceptedRideId', null)
+    .order('departAt', { ascending: true });
+  if (error) throw error;
+
+  type Row = {
+    id: string;
+    departAt: string | null;
+    dropoffText: string | null;
+    ride_offers: { status: OfferStatus }[] | null;
+  };
+  return ((data ?? []) as unknown as Row[])
+    // A search with a request still waiting is already listed under that driver.
+    .filter((r) => !r.ride_offers?.some((offer) => offer.status === 'pending'))
+    .map((r) => ({ requestId: r.id, destination: r.dropoffText?.trim() || null, departAt: r.departAt }));
+}
+
 // Passenger: cancel a booking (frees the ride again if it had been accepted).
 export async function cancelBooking(requestId: string) {
   const { error } = await supabase.rpc('cancel_booking', { request_id: requestId });
