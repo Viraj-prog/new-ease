@@ -3,6 +3,7 @@ import PersonPopup, { type Person } from '@/components/PersonPopup';
 import PreviousTripCard from '@/components/PreviousTripCard';
 import RideBox from '@/components/RideBox';
 import SegmentedToggle, { type ToggleOption } from '@/components/SegmentedToggle';
+import TripLifecycleActions from '@/components/TripLifecycleActions';
 import { useMyRides } from '@/hooks/useMyRides';
 import { useAuth } from '@/lib/auth';
 import { avatarSlot } from '@/lib/driverExtras';
@@ -41,7 +42,8 @@ const statusLabels: Record<RideStatus, string> = {
 };
 
 function isCurrentBooking(ride: BookedRide) {
-  return isActiveRide(ride.rideStatus) && (ride.status === 'accepted' || ride.status === 'pending');
+  return ride.status === 'accepted' && isActiveRide(ride.rideStatus)
+    || ride.status === 'pending' && ride.rideStatus === 'scheduled';
 }
 
 function bookingLabel(ride: BookedRide) {
@@ -71,9 +73,9 @@ export default function RidesScreen() {
   const insets = useSafeAreaInsets();
   const notify = useNotify();
   const { session, driverMode } = useAuth();
-  const { posted, booked, trips, history, loading, error, reload, cancelPosted, cancelBooked } =
-    useMyRides(session?.user.id);
   const [tab, setTab] = useState<RideTab>('pending');
+  const { posted, booked, trips, history, loading, error, reload, cancelPosted, cancelBooked } =
+    useMyRides(session?.user.id, !driverMode && tab === 'pending');
   const redoCount = useRef(0);
   const [person, setPerson] = useState<Person | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -129,7 +131,7 @@ export default function RidesScreen() {
           name: ride.driver.name,
           lines: [ride.driver.rating ? `Rating: ${ride.driver.rating} / 5` : 'No rating yet'],
         })}
-        onCancel={isCurrentBooking(ride) ? () =>
+        onCancel={ride.rideStatus === 'scheduled' && isCurrentBooking(ride) ? () =>
           confirmCancel(
             'Cancel this ride?',
             ride.status === 'accepted'
@@ -195,7 +197,7 @@ export default function RidesScreen() {
                           pathname: '/ride-requests',
                           params: { rideId: r.rideId },
                         })}
-                        onCancel={isActiveRide(r.status) ? () =>
+                        onCancel={r.status === 'scheduled' ? () =>
                           confirmCancel(
                             'Cancel this ride?',
                             r.passenger
@@ -204,7 +206,12 @@ export default function RidesScreen() {
                             () => cancelPosted(r.rideId),
                           )
                         : undefined}
-                      />
+                      >
+                        <TripLifecycleActions rideId={r.rideId} status={r.status} onChanged={(status) => {
+                          if (status === 'completed') setTab('previous');
+                          void reload();
+                        }} />
+                      </RideBox>
                     ))}
                   </View>
                 )

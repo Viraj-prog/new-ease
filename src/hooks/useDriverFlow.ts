@@ -3,7 +3,6 @@ import { errText, resolveDestination, resolveStart } from '@/lib/places';
 import {
   acceptPlannedRequest,
   declineRequest,
-  finishTrip,
   loadActiveTrip,
   loadDriverTrip,
   loadDriverRideState,
@@ -130,20 +129,6 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     }, [active, sync]),
   );
 
-  // Mark the shown trip finished and clear it from the screen. Returns null on success, or the
-  // reason it failed. (It sets no message, so the caller can go straight back Home.)
-  async function finish(): Promise<string | null> {
-    if (!trip) return null;
-    try {
-      await finishTrip(trip.rideId);
-      clear();
-      return null;
-    } catch (e) {
-      console.error(e);
-      return errText(e);
-    }
-  }
-
   const refreshRequests = useCallback(async (rideId: string, saved?: Trip) => {
     if (!userId) return;
     const revision = ++loadRevision.current;
@@ -171,7 +156,7 @@ export function useDriverFlow(userId: string | undefined, active = true) {
   }, [active, refreshRequests, tripId]));
 
   async function respond(req: Req, accept: boolean) {
-    if (!trip || !userId || responding) return false;
+    if (!trip || trip.status !== 'scheduled' || !userId || responding) return false;
     setResponding(true);
     setAcceptError(null);
     try {
@@ -198,8 +183,17 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     }
   }
 
+  function markStarted() {
+    if (!trip) return;
+    setAcceptError(null);
+    setRideState(null);
+    setTrip({ ...trip, status: 'in_progress' });
+    void refreshRequests(trip.rideId);
+  }
+
   const requests = currentRide?.requests ?? [];
-  const visible = requests.filter((r) => r.status !== 'accepted' && estimates.visibleIds.has(r.id));
+  const visible = trip?.status === 'scheduled'
+    ? requests.filter((r) => r.status !== 'accepted' && estimates.visibleIds.has(r.id)) : [];
   // The request shown in the popup: a tapped dot first, else the first waiting request.
   const popup =
     visible.find((r) => r.id === selectedId) ??
@@ -225,6 +219,6 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     popupEstimate: popup ? estimates.getEstimate(popup) : undefined,
     retryChecks: estimates.retryChecks,
     retryPlan: tripId ? () => void refreshRequests(tripId) : undefined,
-    post, respond, clear, closePopup, finish,
+    post, respond, clear, closePopup, markStarted,
   };
 }

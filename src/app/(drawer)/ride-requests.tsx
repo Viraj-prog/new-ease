@@ -144,7 +144,9 @@ export default function RideRequestsScreen() {
             <PlannedRouteSummary plan={plan} />
           </View>
         )}
-        {!loading && !error && groups.map((group) => {
+        {!loading && !error && groups.filter((group) =>
+          current?.trip.status === 'scheduled' || group.status === 'accepted',
+        ).map((group) => {
           const all = requests.filter((request) => request.status === group.status);
           const rows = group.status === 'accepted' ? all : all.filter((request) => estimates.visibleIds.has(request.id));
           return (

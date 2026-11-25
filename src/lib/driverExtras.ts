@@ -29,8 +29,8 @@ export function driverExtras(r: Result): DriverExtras {
   const h = hash(r.rideId);
   const car = CARS[h % CARS.length];
   const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
-  const plate = `${letters[h % letters.length]}${letters[(h >> 3) % letters.length]}${
-    letters[(h >> 6) % letters.length]
+  const plate = `${letters[h % letters.length]}${letters[(h >>> 3) % letters.length]}${
+    letters[(h >>> 6) % letters.length]
   } ${1000 + (h % 9000)}`;
   return {
     car: car.model,

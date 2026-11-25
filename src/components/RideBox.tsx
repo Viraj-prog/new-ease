@@ -2,6 +2,7 @@ import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
 import { Ionicons } from '@expo/vector-icons';
+import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import PressButton from '@/components/PressButton';
 
@@ -17,6 +18,7 @@ type Props = {
   viewDisabled?: boolean;
   onView: () => void;
   onCancel?: () => void;
+  children?: ReactNode;
 };
 
 // One ride: where it starts and ends, plus a view button and a cancel button.
@@ -30,6 +32,7 @@ export default function RideBox({
   viewDisabled = false,
   onView,
   onCancel,
+  children,
 }: Props) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
@@ -74,6 +77,7 @@ export default function RideBox({
           </PressButton>
         )}
       </View>
+      {children}
     </View>
   );
 }

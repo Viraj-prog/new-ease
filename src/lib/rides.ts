@@ -1,4 +1,5 @@
 import { classifyTrip, dayRange, localDate, type Pt } from './geo';
+import { buildGoogleMapsLegs } from './googleMapsRoute';
 import { getDrivingTimeMatrix, queuePlanningOsrmRequest } from './osrmTable';
 import { pickupPlanMatches, pickupPlanPoints, planPickupOrder, type PickupPassenger, type PickupStop } from './pickupPlanner';
 import { getRoute } from './routing';
@@ -27,6 +28,8 @@ export function isActiveRide(status: RideStatus) {
 export type Trip = {
   rideId: string;
   status: RideStatus;
+  startText: string;
+  endText: string;
   start: Pt;
   destination: Pt;
   route: Pt[];
@@ -127,6 +130,8 @@ export async function postTrip(args: {
   return {
     rideId: data.rideId,
     status: 'scheduled',
+    startText: args.startText || 'Current location',
+    endText: args.endText,
     start: args.start,
     destination: args.end,
     route: r.points,
@@ -139,7 +144,7 @@ export async function postTrip(args: {
   };
 }
 
-const tripFields = 'rideId, status, route, tripMdd, departAt, pricePerKm, startLat, startLng, endLat, endLng, plan';
+const tripFields = 'rideId, status, driverStartLocation, driverEndLocation, route, tripMdd, departAt, pricePerKm, startLat, startLng, endLat, endLng, plan';
 
 // Driver: their earliest unfinished trip, so it can be shown again after a restart.
 export async function loadActiveTrip(driverId: string): Promise<Trip | null> {
@@ -171,6 +176,8 @@ export async function loadDriverTrip(rideId: string, driverId: string): Promise<
 function asTrip(data: {
   rideId: string;
   status: RideStatus;
+  driverStartLocation: string;
+  driverEndLocation: string;
   route: { points: Pt[]; distanceKm: number; durationMin: number } | null;
   tripMdd: number | null;
   departAt: string | null;
@@ -185,6 +192,8 @@ function asTrip(data: {
   return {
     rideId: data.rideId,
     status: data.status,
+    startText: data.driverStartLocation,
+    endText: data.driverEndLocation,
     start: data.startLat == null || data.startLng == null
       ? data.route.points[0] : { lat: data.startLat, lng: data.startLng },
     destination: data.endLat == null || data.endLng == null
@@ -211,9 +220,10 @@ async function loadRequests(trip: Trip, driverId: string) {
   const { from, to } = dayRange(trip.when);
   const fields = `${planningFields}, departAt, directKm` as const;
   const [searching, offers] = await Promise.all([
-    supabase.from('ride_requests').select(fields)
-      .eq('status', 'open').neq('passengerId', driverId)
-      .gte('departAt', from).lte('departAt', to),
+    trip.status === 'scheduled'
+      ? supabase.from('ride_requests').select(fields).eq('status', 'open').neq('passengerId', driverId)
+        .gte('departAt', from).lte('departAt', to)
+      : Promise.resolve({ data: null, error: null }),
     supabase.from('ride_offers').select(`status, fare, ride_requests!inner(${fields})`)
       .eq('rideId', trip.rideId),
   ]);
@@ -226,7 +236,8 @@ async function loadRequests(trip: Trip, driverId: string) {
   const offeredIds = new Set(linked.map((offer) => offer.ride_requests.id));
   const candidates = [
     ...linked.filter(({ status, ride_requests }) =>
-      status === 'accepted' || (status === 'pending' && ['open', 'pending'].includes(ride_requests.status)),
+      status === 'accepted' || (trip.status === 'scheduled' && status === 'pending'
+        && ['open', 'pending'].includes(ride_requests.status)),
     ).map((offer) => ({ row: offer.ride_requests, status: offer.status, fare: offer.fare })),
     ...(searching.data ?? []).filter((row) => !offeredIds.has(row.id))
       .map((row) => ({ row, status: 'open', fare: null })),
@@ -463,6 +474,18 @@ export async function loadDriverRideState(trip: Trip, driverId: string): Promise
       planError: detail ? `Could not update the pickup plan. ${detail}` : 'Could not update the pickup plan. Refresh to retry.',
     };
   }
+}
+
+export async function startTrip(driverId: string, rideId: string) {
+  const trip = await loadDriverTrip(rideId, driverId);
+  if (!trip) throw new Error('This scheduled ride is no longer available.');
+  if (trip.status === 'in_progress') return;
+
+  const accepted = await loadAcceptedPlanningRequests(rideId);
+  const plan = pickupPlanMatches(trip.plan, accepted) ? trip.plan : await reconcilePickupPlan(trip, accepted);
+  buildGoogleMapsLegs(trip.start, trip.destination, plan?.stops ?? []);
+  const { error } = await supabase.rpc('start_trip', { ride_id: rideId });
+  if (error) throw error;
 }
 
 export type CandidateEstimate =

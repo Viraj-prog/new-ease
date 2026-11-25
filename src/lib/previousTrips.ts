@@ -155,11 +155,11 @@ async function loadAsDriver(userId: string, history: boolean): Promise<PreviousT
     .in('userId', ids) : { data: [] };
 
   return rides.flatMap((ride) => {
-    const requests: (LinkedOffer | null)[] = linked.filter((offer) => offer.rideId === ride.rideId);
-    if (history) {
-      const passenger = requests.find((request) => request?.status === 'accepted') ?? requests[0];
-      requests.splice(0, requests.length, passenger ?? null);
-    }
+    const offers = linked.filter((offer) => offer.rideId === ride.rideId);
+    const passengers = offers.filter((offer) => offer.status === 'accepted');
+    const requests = ride.status === 'completed' && passengers.length
+      ? passengers
+      : [ride.status === 'completed' ? null : passengers[0] ?? offers[0] ?? null];
     return requests.map((offer) => {
       const r = offer?.ride_requests;
       const person = r && people?.find((u) => u.userId === r.passengerId);

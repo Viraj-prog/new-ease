@@ -13,7 +13,7 @@ import PlanForm from '@/components/PlanForm';
 import RoutePreview, { PlannedRouteSummary } from '@/components/RoutePreview';
 import SearchPill from '@/components/SearchPill';
 import ThemeToggle from '@/components/ThemeToggle';
-import TripNavigation from '@/components/TripNavigation';
+import TripLifecycleActions from '@/components/TripLifecycleActions';
 import TripSheet, { tripTitle } from '@/components/TripSheet';
 import { useDriverFlow } from '@/hooks/useDriverFlow';
 import { haversineKm } from '@/lib/previousTrips';
@@ -85,7 +85,6 @@ export default function HomeScreen() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [booked, setBooked] = useState<{ rideId: string; name: string | null } | null>(null);
-  const [navigating, setNavigating] = useState(false);
 
   // The route shown for a look ("Your route") before a driver posts, or a rider searches.
   const [preview, setPreview] = useState<{
@@ -222,7 +221,7 @@ export default function HomeScreen() {
     setManualRecoveryId(null);
     driver.clear();
     setChosenId(null);
-    setListOpen(false);
+    setListOpen(true);
     // Reuse the start and end the route preview already found.
     const known = preview ? { ...preview, from: preview.start, to: preview.end } : undefined;
     const found = await passenger.search(pickup, destination, when ?? new Date(), known);
@@ -405,8 +404,8 @@ export default function HomeScreen() {
   const showResults = !driverMode && (
     (listOpen && (hasResults || reopenedSearch)) || (!!automaticSearch && !hasResults)
   );
-  // The best match is shown over the preview; "See others" opens the full list.
-  const showMatch = hasResults && !listOpen;
+  // Cancellation recovery starts with the best match. A normal search opens the full list.
+  const showMatch = !!automaticSearch && hasResults && !listOpen;
   const best = passenger.results[0];
   const previewNow = preview && preview.driver === driverMode && !showResults ? preview : null;
   const showTrip = !!driver.trip && !previewNow;
@@ -487,8 +486,9 @@ export default function HomeScreen() {
       leaveAutomaticSearch();
       return;
     }
-    setChosenId(null);
-  }, [automaticSearch, clearAll, hasResults, leaveAutomaticSearch, reopenedSearch]);
+    if (automaticSearch) setChosenId(null);
+    else backToPreview();
+  }, [automaticSearch, backToPreview, clearAll, hasResults, leaveAutomaticSearch, reopenedSearch]);
 
   const backFromPreview = useCallback(() => {
     setPreview(null);
@@ -498,8 +498,7 @@ export default function HomeScreen() {
   useFocusEffect(useCallback(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (drawerStatus === 'open') return false;
-      if (navigating) setNavigating(false);
-      else if (showResults) backFromDrivers();
+      if (showResults) backFromDrivers();
       else if (showMatch) {
         if (automaticSearch) leaveAutomaticSearch();
         else backToPreview();
@@ -514,7 +513,7 @@ export default function HomeScreen() {
     });
     return () => subscription.remove();
   }, [automaticSearch, backFromDrivers, backFromPreview, backToPreview, clearAll, drawerStatus, leaveAutomaticSearch,
-    navigating, showMatch, showPlan, showPreview, showResults, showTrip]));
+    showMatch, showPlan, showPreview, showResults, showTrip]));
 
   // Driver answered a request. After accepting, look up who is booked.
   async function answer(accept: boolean, req: Req | null = driver.popup) {
@@ -524,7 +523,10 @@ export default function HomeScreen() {
 
   // "Yes" on the cancel confirmation: remove the trip from rider search.
   async function cancelTrip() {
-    if (!driver.trip) return;
+    if (driver.trip?.status !== 'scheduled') {
+      setConfirmCancel(false);
+      return;
+    }
     setCancelling(true);
     try {
       await cancelPostedRide(driver.trip.rideId);
@@ -539,22 +541,9 @@ export default function HomeScreen() {
     }
   }
 
-  // "End" in the navigation preview finishes the trip.
-  async function endTrip() {
-    const problem = await driver.finish();
-    if (problem) {
-      // Stay on the navigation screen so the driver can try again.
-      notify({ kind: 'alert', title: 'Could not end the trip', subtitle: problem });
-      return;
-    }
-    // Back to the Home screen.
-    setNavigating(false);
-    closePlan();
-    notify({ kind: 'success', title: 'Trip Successfully Ended!' });
-  }
-
   // What the map draws: the posted trip, or the driver being looked at.
   const visiblePlan = showTrip ? driver.trip?.plan : null;
+  const inProgress = driver.trip?.status === 'in_progress';
   const retryPassenger = driver.acceptError?.retry;
   const route = previewNow?.route ?? visiblePlan?.points ?? driver.trip?.route ?? [];
   const markers: MapMarker[] = showTrip
@@ -586,14 +575,7 @@ export default function HomeScreen() {
         }}
       />
 
-      {navigating ? (
-        <TripNavigation
-          destination={destination}
-          distanceKm={visiblePlan?.distanceKm ?? driver.trip?.distanceKm ?? 0}
-          durationMin={visiblePlan?.durationMin ?? driver.trip?.durationMin ?? 0}
-          onEnd={endTrip}
-        />
-      ) : showResults ? (
+      {showResults ? (
         <DriverList
           drivers={passenger.results}
           emptyMessage={(reopenedSearch || automaticSearch) && !passenger.loading ? passenger.msg : undefined}
@@ -613,7 +595,7 @@ export default function HomeScreen() {
             <View pointerEvents='none' style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }]} />
           )}
           {!showPreview && (!showPlan || showTrip) && <MenuButton onPress={() => navigation.openDrawer()} />}
-          {showTrip && <MapTitleChip title={tripTitle(driver.popup, bookedNow)} />}
+          {showTrip && <MapTitleChip title={inProgress ? 'Trip in progress' : tripTitle(driver.popup, bookedNow)} />}
           {showPreview && <MapTitleChip title='Your route' />}
 
           <BottomSheet
@@ -661,8 +643,8 @@ export default function HomeScreen() {
                     />
                   )}
                   <TripSheet
-                    startText={pickup}
-                    endText={destination}
+                    startText={driver.trip.startText}
+                    endText={driver.trip.endText}
                     mddKm={driver.trip.mdd}
                     request={driver.popup}
                     booked={bookedNow}
@@ -674,8 +656,24 @@ export default function HomeScreen() {
                     onAccept={() => answer(true)}
                     onDecline={() => answer(false)}
                     onNotNow={driver.closePopup}
-                    onStart={() => setNavigating(true)}
-                    onCancel={() => setConfirmCancel(true)}
+                    inProgress={inProgress}
+                    lifecycleActions={
+                      <TripLifecycleActions
+                        key={driver.trip.rideId}
+                        rideId={driver.trip.rideId}
+                        status={driver.trip.status}
+                        disabled={driver.responding || cancelling}
+                        onChanged={(status) => {
+                          if (status === 'in_progress') {
+                            setConfirmCancel(false);
+                            driver.markStarted();
+                          } else {
+                            closePlan();
+                          }
+                        }}
+                      />
+                    }
+                    onCancel={inProgress ? undefined : () => setConfirmCancel(true)}
                     onScheduleAnother={() => {
                       clearFields();
                       setWhen(null);

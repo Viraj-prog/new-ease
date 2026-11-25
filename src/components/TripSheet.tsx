@@ -6,6 +6,7 @@ import InlineNotice from '@/components/InlineNotice';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
+import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import PressButton from '@/components/PressButton';
 
@@ -26,8 +27,9 @@ type Props = {
   onAccept: () => void;
   onDecline: () => void;
   onNotNow: () => void;
-  onStart: () => void;
-  onCancel: () => void;
+  inProgress: boolean;
+  lifecycleActions: ReactNode;
+  onCancel?: () => void;
   onScheduleAnother: () => void;
 };
 
@@ -57,15 +59,24 @@ export default function TripSheet(p: Props) {
 
   const stops = <StopsList start={p.startText} end={p.endText} />;
 
+  if (p.inProgress) {
+    return (
+      <View>
+        {stops}
+        <View style={styles.row}>{p.lifecycleActions}</View>
+      </View>
+    );
+  }
+
   const startCancel = (
     <View>
       <View style={styles.row}>
-        <PressButton style={[styles.button, { backgroundColor: colors.success }]} onPress={p.onStart}>
-          <Text style={[styles.buttonText, { color: colors.onSuccess }]}>Start trip</Text>
-        </PressButton>
-        <PressButton style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onCancel}>
-          <Text style={[styles.buttonText, { color: colors.onAlert }]}>Cancel trip</Text>
-        </PressButton>
+        {p.lifecycleActions}
+        {p.onCancel && (
+          <PressButton style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onCancel}>
+            <Text style={[styles.buttonText, { color: colors.onAlert }]}>Cancel trip</Text>
+          </PressButton>
+        )}
       </View>
       <Pressable onPress={p.onScheduleAnother} hitSlop={8}>
         <Text style={styles.link}>Schedule another ride</Text>
@@ -134,6 +145,7 @@ export default function TripSheet(p: Props) {
         <Pressable onPress={p.onNotNow} hitSlop={8}>
           <Text style={styles.link}>Not now</Text>
         </Pressable>
+        {startCancel}
       </View>
     );
   }
