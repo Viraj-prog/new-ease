@@ -28,8 +28,6 @@ export type TripEvent = {
   otherAs: 'your driver' | 'a passenger';
   // Lower shows first when several things happened at once.
   order: number;
-  // The rider's trip is over: send them to Home.
-  goHome?: boolean;
 };
 
 // Rides older than this no longer produce updates.
@@ -89,10 +87,7 @@ function riderEvent(was: OfferState | undefined, now: OfferState): TripEvent | n
   if (now.byDriver && !was?.byDriver) {
     // Cancelled after it started: the trip is over. Before that, the search opens again.
     if (now.endedEarly) {
-      return {
-        ...event('alert', 'Your driver cancelled the trip', `Your ride to ${now.destination} was cancelled.`, 0),
-        goHome: true,
-      };
+      return event('alert', 'Your driver cancelled the trip', `Your ride to ${now.destination} was cancelled.`, 0);
     }
     return event('alert', 'Your driver cancelled', 'Find another driver in Scheduled Trips.', 0);
   }

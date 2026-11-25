@@ -211,20 +211,6 @@ export function usePassengerFlow(userId: string | undefined, onAccepted?: (drive
       .catch((e) => console.warn('Could not close the search', e));
   }, [requestId]);
 
-  // Close the search for good: the rider pressed Cancel on it.
-  async function cancelSearch(): Promise<boolean> {
-    if (!requestId || sending.current) return false;
-    try {
-      await cancelBooking(requestId);
-      setRequestId(null);
-      return true;
-    } catch (e) {
-      console.error(e);
-      notify({ kind: 'alert', title: 'Could not cancel', subtitle: errText(e) });
-      return false;
-    }
-  }
-
   async function request(r: Result) {
     if (!requestId || sending.current || offerStatuses[r.rideId] || notifiedRequest.current === requestId) {
       return false;
@@ -253,6 +239,6 @@ export function usePassengerFlow(userId: string | undefined, onAccepted?: (drive
 
   return {
     loading, msg, results, pickup, dropoff, offerStatuses, sendingRideId,
-    search, resume, request, clear, abandon, cancelSearch,
+    search, resume, request, clear, abandon,
   };
 }

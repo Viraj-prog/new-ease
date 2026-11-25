@@ -2,7 +2,6 @@ import BackButton from '@/components/BackButton';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import DivergenceModal from '@/components/DivergenceModal';
 import DriverList from '@/components/DriverList';
-import BestMatchOverlay from '@/components/home/BestMatchOverlay';
 import DriverTripPanel from '@/components/home/DriverTripPanel';
 import HomeSheetContent from '@/components/HomeSheetContent';
 import InlineNotice from '@/components/InlineNotice';
@@ -24,7 +23,6 @@ import { useRoleSwitch } from '@/hooks/useRoleSwitch';
 import { useRoutePreview } from '@/hooks/useRoutePreview';
 import { useSavedTrips } from '@/hooks/useSavedTrips';
 import { useAuth } from '@/lib/auth';
-import { avatarSlot } from '@/lib/driverExtras';
 import { homeMapContent } from '@/lib/homeMap';
 import { useNotify } from '@/lib/notify';
 import { pickDate, pickDateTime, pickTime } from '@/lib/pickDateTime';
@@ -106,10 +104,8 @@ export default function HomeScreen() {
     beforeLookup: () => passenger.clear(),
     onShown: () => sheetRef.current?.snapToIndex(SNAP.TRIP),
   });
-  const results = usePassengerResults({
-    userId, driverMode, view, passenger, onReopened: () => setPreview(null),
-  });
-  const { showResults, showMatch, best, automatic } = results;
+  const results = usePassengerResults({ driverMode, passenger });
+  const { showResults } = results;
   const resetResults = results.reset;
 
   // Passenger view drops any trip being shown. (Driver view re-checks it when Home opens.)
@@ -201,22 +197,15 @@ export default function HomeScreen() {
 
   // The History tab sends a trip here to redo. It is read once, then cleared.
   const redoParams = useLocalSearchParams<{
-    redo?: string; from?: string; to?: string; role?: string; resumeRequest?: string; resumeOffer?: string;
-    reset?: string;
+    redo?: string; from?: string; to?: string; role?: string; resumeRequest?: string;
   }>();
   useFocusEffect(
     useCallback(() => {
-      // The driver cancelled the trip under way: whatever was open gives way to Home.
-      if (redoParams.reset) {
-        router.setParams({ reset: undefined });
-        closePlan();
-        return;
-      }
       if (redoParams.resumeRequest) {
         const requestId = redoParams.resumeRequest;
-        router.setParams({ resumeRequest: undefined, resumeOffer: undefined });
+        router.setParams({ resumeRequest: undefined });
         setPreview(null);
-        results.openFromHistory(redoParams.resumeOffer);
+        results.openFromHistory();
         setView('plan');
         if (driverMode) void choose(false);
         void passenger.resume(requestId);
@@ -227,7 +216,7 @@ export default function HomeScreen() {
       router.setParams({ redo: undefined, from: undefined, to: undefined, role: undefined });
       redoTrip(from ?? '', to, role !== 'rider');
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [redoParams.redo, redoParams.resumeRequest, redoParams.reset]),
+    }, [redoParams.redo, redoParams.resumeRequest]),
   );
 
   // Post the trip being previewed. The preview goes away once it is posted.
@@ -277,7 +266,7 @@ export default function HomeScreen() {
   } = useHomeSheet(windowHeight, insets.bottom, showPreview);
 
   // Back from the driver list returns to the route preview.
-  const { setChosenId, setListOpen, finishAutomatic, reopened, hasResults } = results;
+  const { setChosenId, setListOpen, reopened } = results;
   const abandonSearch = passenger.abandon;
   const backToPreview = useCallback(() => {
     abandonSearch();
@@ -316,23 +305,6 @@ export default function HomeScreen() {
     void driver.sync();
   }
 
-  const leaveAutomaticSearch = useCallback(() => {
-    finishAutomatic();
-    clearAll();
-    setView('home');
-  }, [clearAll, finishAutomatic]);
-
-  // "Cancel" on the match for a reopened search closes the search itself.
-  async function cancelReopenedSearch() {
-    if (!(await passenger.cancelSearch())) return;
-    leaveAutomaticSearch();
-    notify({ kind: 'success', title: 'Search cancelled' });
-  }
-
-  const recoveryNotice = automatic?.showNotice ? (
-    <InlineNotice message='Your driver cancelled, we’re searching again' onDismiss={results.dismissNotice} />
-  ) : null;
-
   const backFromDrivers = useCallback(() => {
     setListOpen(false);
     if (reopened) {
@@ -341,13 +313,8 @@ export default function HomeScreen() {
       router.navigate('/rides');
       return;
     }
-    if (automatic && !hasResults) {
-      leaveAutomaticSearch();
-      return;
-    }
-    if (automatic) setChosenId(null);
-    else backToPreview();
-  }, [automatic, backToPreview, clearAll, hasResults, leaveAutomaticSearch, reopened, setChosenId, setListOpen]);
+    backToPreview();
+  }, [backToPreview, clearAll, reopened, setListOpen]);
 
   const backFromPreview = useCallback(() => {
     setPreview(null);
@@ -358,10 +325,6 @@ export default function HomeScreen() {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (drawerStatus === 'open') return false;
       if (showResults) backFromDrivers();
-      else if (showMatch) {
-        if (automatic) leaveAutomaticSearch();
-        else backToPreview();
-      }
       else if (showPreview) backFromPreview();
       else if (showTrip) leaveTrip();
       else if (showPlan) {
@@ -372,8 +335,8 @@ export default function HomeScreen() {
       return true;
     });
     return () => subscription.remove();
-  }, [automatic, backFromDrivers, backFromPreview, backToPreview, clearAll, drawerStatus, leaveAutomaticSearch,
-    leaveTrip, showMatch, showPlan, showPreview, showResults, showTrip]));
+  }, [backFromDrivers, backFromPreview, clearAll, drawerStatus, leaveTrip, showPlan, showPreview,
+    showResults, showTrip]));
 
   // Driver answered a request.
   async function answer(accept: boolean, req: Req | null = driver.popup) {
@@ -444,9 +407,7 @@ export default function HomeScreen() {
       {showResults ? (
         <DriverList
           drivers={passenger.results}
-          emptyMessage={(reopened || automatic) && !passenger.loading ? passenger.msg : undefined}
-          notice={recoveryNotice}
-          onRetry={automatic ? () => void passenger.resume(automatic.requestId) : undefined}
+          emptyMessage={reopened && !passenger.loading ? passenger.msg : undefined}
           chosenId={results.chosenId}
           offerStatuses={passenger.offerStatuses}
           sendingRideId={passenger.sendingRideId}
@@ -576,27 +537,10 @@ export default function HomeScreen() {
             </BottomSheetScrollView>
           </BottomSheet>
 
-          {showMatch && best && (
-            <BestMatchOverlay
-              notice={recoveryNotice}
-              driver={best}
-              offerStatus={passenger.offerStatuses[best.rideId]}
-              sending={passenger.sendingRideId === best.rideId}
-              avatarIndex={avatarSlot(Math.max(0, passenger.results.indexOf(best)))}
-              hasOthers={passenger.results.length > 1}
-              onSeeOthers={() => setListOpen(true)}
-              onCancel={!automatic ? backToPreview
-                : passenger.offerStatuses[best.rideId] ? leaveAutomaticSearch
-                : () => void cancelReopenedSearch()}
-              onConfirm={results.confirmBest}
-            />
-          )}
-
-          {showPreview && <BackButton onPress={showMatch ? backToPreview : backFromPreview} />}
-          {automatic && showMatch && <BackButton onPress={leaveAutomaticSearch} />}
+          {showPreview && <BackButton onPress={backFromPreview} />}
 
           {/* Post trip / Find driver problems: a card above the sheet, outside it. */}
-          {showPreview && !!message && !showMatch && (
+          {showPreview && !!message && (
             <Animated.View pointerEvents='box-none' style={[styles.notice, noticeStyle]}>
               <InlineNotice message={message} style={styles.noticeCard} />
             </Animated.View>

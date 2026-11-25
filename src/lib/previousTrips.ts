@@ -22,7 +22,6 @@ export type PreviousTrip = {
   estimated: boolean;
   statusLabel?: string;
   reopenedRequestId?: string;
-  reopenedOfferId?: string;
 };
 
 const rad = (d: number) => (d * Math.PI) / 180;
@@ -125,7 +124,6 @@ async function loadAsRider(userId: string, history: boolean): Promise<PreviousTr
       : undefined,
     reopenedRequestId: history && r.cancelledByDriver && r.ride_requests.status === 'open'
       && !isExpired(r.ride_requests.departAt) ? r.ride_requests.id : undefined,
-    reopenedOfferId: r.cancelledByDriver ? r.id : undefined,
     ...priceOf({
       ...r.ride_requests,
       price: r.fare ?? (r.status === 'accepted' ? r.ride_requests.price : null),

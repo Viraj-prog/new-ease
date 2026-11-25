@@ -1,7 +1,6 @@
 import { useNotify } from '@/lib/notify';
 import { secureStorage } from '@/lib/secureStorage';
 import { loadSnapshot, nameEvent, tripEvents, type Snapshot } from '@/lib/tripUpdates';
-import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
@@ -10,8 +9,8 @@ const CHECK_MS = 10000;
 // Tells the user what the other people on their trips have done, on whatever screen they are on:
 // a request accepted, declined, withdrawn or new, a cancellation, a trip started or finished. The
 // last check is saved, so something that happened while the app was closed is reported when it
-// opens. Nothing arrives while the app is closed; that needs push notifications. A rider whose
-// trip was cancelled under way is also taken to Home.
+// opens. Nothing arrives while the app is closed; that needs push notifications. It only shows a
+// notice: the user stays on the page they are on.
 export function useTripUpdates(userId: string | undefined) {
   const notify = useNotify();
 
@@ -41,10 +40,6 @@ export function useTripUpdates(userId: string | undefined) {
         if (events.length) {
           const first = await nameEvent(events[0]);
           if (stopped) return;
-          if (events.some((e) => e.goHome)) {
-            // The value only has to differ each time, so Home acts on it once.
-            router.navigate({ pathname: '/', params: { reset: String(Date.now()) } });
-          }
           const more = events.length - 1;
           notify({
             kind: first.kind,

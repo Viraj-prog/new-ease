@@ -35,10 +35,11 @@ buttons. The first three differences are still open.
 1. Searches expire 1 hour after their time. A driver is asked about an unstarted ride after 3 hours.
 2. One open search per rider per day. (This rules out separate morning and evening searches.)
 3. Navigation opens Google Maps with the **remaining** stops. The driver marks stops done.
-4. **Cancelling a trip under way** (changed 2026-11-25): riders waiting or in the car are
-   cancelled, told in the app and taken to Home; they are not put back to searching. Riders
-   already dropped off stay completed. Needs `015`. Cancelling before the start still returns
-   riders to searching.
+4. **A driver cancelling** (changed 2026-11-25): the rider only gets an in-app notice and stays
+   on the page they are on; the app opens nothing by itself. Under way, riders waiting or in the
+   car are cancelled and not put back to searching, and riders already dropped off stay
+   completed (needs `015`). Before the start, riders go back to searching and can choose
+   **Find drivers** in Scheduled Trips.
 5. Arrival: ask the driver to confirm when they return to the app near a stop. No background
    location tracking.
 

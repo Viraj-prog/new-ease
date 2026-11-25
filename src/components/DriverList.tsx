@@ -8,7 +8,6 @@ import { offerStatusLabels, type OfferStatus, type Result } from '@/lib/rides';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
-import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PressButton from '@/components/PressButton';
@@ -16,8 +15,6 @@ import PressButton from '@/components/PressButton';
 type Props = {
   drivers: Result[];
   emptyMessage?: string;
-  notice?: ReactNode;
-  onRetry?: () => void;
   // The driver the rider has tapped, if any; this shows the Confirm button.
   chosenId: string | null;
   offerStatuses: Partial<Record<string, OfferStatus>>;
@@ -43,7 +40,7 @@ const initialsOf = (name: string) =>
 
 // Full-screen "Available drivers" list. Tapping a card selects it; Confirm sends the request.
 export default function DriverList({
-  drivers, emptyMessage, notice, onRetry, chosenId, offerStatuses, sendingRideId, onChoose, onBack, onConfirm,
+  drivers, emptyMessage, chosenId, offerStatuses, sendingRideId, onChoose, onBack, onConfirm,
   summary, priceText, confirmLabel, hideDeparture,
 }: Props) {
   const { colors } = useTheme();
@@ -62,7 +59,6 @@ export default function DriverList({
           paddingHorizontal: 20,
         }}
       >
-        {notice && <View style={styles.notice}>{notice}</View>}
         {n > 0 ? (
           <Text style={styles.count}>
             {summary ?? `${n} driver${n === 1 ? '' : 's'} match${n === 1 ? 'es' : ''} your route`}
@@ -70,11 +66,6 @@ export default function DriverList({
         ) : !!emptyMessage && (
           <View style={styles.list}>
             <InlineNotice message={emptyMessage} />
-            {onRetry && (
-              <PressButton style={styles.confirm} onPress={onRetry}>
-                <Text style={styles.confirmText}>Retry</Text>
-              </PressButton>
-            )}
           </View>
         )}
 

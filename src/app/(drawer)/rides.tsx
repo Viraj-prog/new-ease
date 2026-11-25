@@ -98,7 +98,7 @@ export default function RidesScreen() {
   function findAnother(trip: PreviousTrip) {
     router.navigate({
       pathname: '/',
-      params: { resumeRequest: trip.reopenedRequestId, resumeOffer: trip.reopenedOfferId },
+      params: { resumeRequest: trip.reopenedRequestId },
     });
   }
 

@@ -730,20 +730,6 @@ export async function loadRequestOffers(requestId: string) {
   };
 }
 
-export async function loadReopenedPassengerRequests(passengerId: string) {
-  const { data, error } = await supabase.from('ride_offers')
-    .select('id, requestId, ride_requests!inner(passengerId, status)')
-    .eq('ride_requests.passengerId', passengerId)
-    .eq('ride_requests.status', 'open')
-    .gte('ride_requests.departAt', searchCutoff())
-    .eq('cancelledByDriver', true)
-    .eq('status', 'cancelled')
-    .order('createdAt', { ascending: false })
-    .order('id');
-  if (error) throw error;
-  return data ?? [];
-}
-
 export async function loadOpenPassengerRequest(requestId: string, passengerId: string) {
   if (!isUuid(requestId) || !isUuid(passengerId)) return null;
   const { data, error } = await supabase.from('ride_requests')
