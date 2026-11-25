@@ -82,23 +82,41 @@ Home; show driving and riding trips together in Pending; make Back leave the rid
 | 9 | Refuse expired requests and acceptances | migration `012` | **yes** | committed; `012` run |
 | 10 | Stop progress, stop buttons, Resume and arrival prompt | migration `013`, lifecycle and Maps files | **yes** | committed; `013` run |
 | 11 | End trip early; correct History for each rider | migration `014`, lifecycle and History files | **yes** | committed; `014` run |
-| 12 | Test every case with two accounts; then plan push notifications | none | later | partly tested |
+| 12 | Test every case with two accounts; then plan push notifications | none | later | mostly tested |
 
 ### Tested on 2026-11-25 (phone as rider, emulator as driver)
 
-Worked: searching skips a ride more than an hour old; the open search shows in Scheduled Trips and
-can be cancelled; a driver accepts a searching rider and a sent request; booking, new request, no
-show and ended-trip notices; Picked up; the arrival prompt after returning from Google Maps; No
-show; the finish warning; End trip early with the rider in the car and with the rider waiting.
+Worked:
 
-Still to test: **Dropped off**, finishing a trip with a passenger on it, ending early after a
-drop-off, the drop-off and destination arrival prompts, Resume's remaining stops inside Google
-Maps, two or more passengers, declines, cancellations before the start, and a refused expired
-request.
+- Searching skips a ride more than an hour old; the open search shows in Scheduled Trips and can be
+  cancelled.
+- A driver accepts a searching rider and a sent request, and declines one.
+- Two bookings on one ride (the same rider account twice): numbered stops, one card per passenger,
+  and **Resume** opening only the remaining stops.
+- Picked up, Dropped off, No show, and the pickup, drop-off and destination arrival prompts. The
+  last two used a position set in code, because the emulator's location stopped updating.
+- Finishing with a passenger not marked dropped off: warning, then Completed for the rider.
+- The rider cancelling a booking; the driver cancelling before the start, after it, and after a
+  drop-off.
+- Overdue popup: **Start trip**, **Cancel ride** and **Finish trip**.
+- The database refusing a request sent from an expired search.
 
-Seen but not changed: tapping a rider's dot on the driver's map did not open the request on the
-emulator (View requests works); the emulator driver account shows as "Driver", probably because it
-has no name saved.
+Changed or fixed while testing: a driver cancelling only notifies the rider; the arrival prompt
+asks only about the next stop; Home no longer shows an empty plan form after the overdue popup
+closes a ride; **Still driving?** appears for a ride started from that popup.
+
+Still to test: two different rider accounts on one ride, a ride long enough to need a second Google
+Maps leg, and the database refusing a driver who accepts an expired search.
+
+Seen but not changed:
+
+- A rider's Pending and History show the driver's start and destination, not their own.
+- A rider already dropped off shows **In progress** until the whole trip closes.
+- Vehicle details and "min away" are made up from the ride's id (`driverExtras.ts`).
+- Nothing limits how much extra distance or pickup wait a set of passengers adds for the driver.
+- Tapping a rider's dot on the driver's map did not open the request on the emulator (**View
+  requests** works).
+- The emulator driver account shows as "Driver", probably because it has no name saved.
 
 Database steps (9 to 11): the script is written first, run by hand in the Supabase SQL editor, and
 app code that depends on it is added only after it is confirmed to have worked. Agree step 10
