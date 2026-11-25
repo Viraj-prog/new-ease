@@ -18,8 +18,8 @@
 
 ## Phase 3 · Scheduled Rides and history
 
-- **Verify finished ride tab membership.** Finish a scheduled test ride and open **Scheduled Rides**. Expect it in **Previous Trips** and **History**, with **Completed** in History, and absent from **Pending**. The four Redo cases were already confirmed.
-- **Verify an in-progress entry in Pending.** Use a scheduled test ride whose stored status is `in_progress` through a controlled test setup. In Driver mode, open **Scheduled Rides → Pending**. Expect the active ride to appear with an **In progress** label and a History entry. The Android Start trip action that records this status belongs to a later phase.
+- **Verify finished ride tab membership.** Finish a scheduled test ride and open **Scheduled Rides**. Expect it under **History** with a green check, and absent from **Pending**. The four Redo cases were already confirmed.
+- **Verify an in-progress entry in Pending.** Use a scheduled test ride whose stored status is `in_progress` through a controlled test setup. In Driver mode, open **Scheduled Rides → Pending**. Expect the active ride to appear with an **In progress** label and no History entry until it is finished. The Android Start trip action that records this status belongs to a later phase.
 
 ## Phase 4 · Offers and cancellation
 
