@@ -13,7 +13,9 @@ export default function StoresView({ stores, onPick }: { stores: Store[]; onPick
   const styles = makeStyles(colors);
 
   return (
-    <ScrollView contentContainerStyle={{ paddingTop: insets.top + 72, paddingBottom: insets.bottom + 24 }}>
+    <ScrollView
+      contentContainerStyle={[styles.page, { paddingTop: insets.top + 72, paddingBottom: insets.bottom + 24 }]}
+    >
       {stores.map((s) => (
         <View key={s.id}>
           <Text style={styles.store}>{s.name}</Text>
@@ -43,21 +45,24 @@ export default function StoresView({ stores, onPick }: { stores: Store[]; onPick
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    store: { fontFamily: fonts.titleSemibold, fontSize: 21, color: c.text, paddingHorizontal: 20, marginTop: 8 },
+    // The space between one store and the next.
+    page: { gap: 28 },
+    // The side padding stays at 20, in line with the menu and cart buttons.
+    store: { fontFamily: fonts.titleSemibold, fontSize: 17, color: c.text, paddingHorizontal: 20 },
     // Vertical padding leaves room for the cards' shadows.
-    row: { gap: 14, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 18 },
+    row: { gap: 11, paddingHorizontal: 20, paddingTop: 11, paddingBottom: 14 },
     card: {
-      width: 142,
-      borderRadius: 20,
+      width: 114,
+      borderRadius: 16,
       backgroundColor: c.card,
       borderWidth: 1,
       borderColor: c.border,
-      boxShadow: `0px 4px 12px ${c.shadow}`,
+      boxShadow: `0px 3px 10px ${c.shadow}`,
     },
-    picture: { height: 86, alignItems: 'center', justifyContent: 'center' },
-    emoji: { fontSize: 46 },
-    text: { paddingHorizontal: 12, paddingVertical: 10, gap: 1 },
-    name: { fontFamily: fonts.semibold, fontSize: 14, color: c.text },
-    unit: { fontFamily: fonts.regular, fontSize: 12, color: c.textSecondary },
-    price: { fontFamily: fonts.titleSemibold, fontSize: 17, color: c.text, marginTop: 6 },
+    picture: { height: 69, alignItems: 'center', justifyContent: 'center' },
+    emoji: { fontSize: 37 },
+    text: { paddingHorizontal: 10, paddingVertical: 8, gap: 1 },
+    name: { fontFamily: fonts.semibold, fontSize: 11, color: c.text },
+    unit: { fontFamily: fonts.regular, fontSize: 10, color: c.textSecondary },
+    price: { fontFamily: fonts.titleSemibold, fontSize: 14, color: c.text, marginTop: 5 },
   });
