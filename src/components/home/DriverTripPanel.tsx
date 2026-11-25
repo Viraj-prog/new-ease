@@ -19,7 +19,7 @@ type Props = {
   // Accept or decline a request: the one in the popup unless another is given.
   onAnswer: (accept: boolean, request?: Req) => void;
   onStarted: () => void;
-  // The trip was finished, or ended early.
+  // The trip was finished, or cancelled under way.
   onFinished: () => void;
   onCancel: () => void;
   onScheduleAnother: () => void;
@@ -40,12 +40,12 @@ export default function DriverTripPanel(p: Props) {
     try {
       await endTripEarly(trip.rideId);
       setConfirmEnd(false);
-      notify({ kind: 'success', title: 'Trip ended' });
+      notify({ kind: 'success', title: 'Trip cancelled' });
       p.onFinished();
     } catch (e) {
       console.error(e);
       setConfirmEnd(false);
-      notify({ kind: 'alert', title: 'Could not end the trip', subtitle: errText(e) });
+      notify({ kind: 'alert', title: 'Could not cancel the trip', subtitle: errText(e) });
     } finally {
       setEnding(false);
     }
@@ -97,9 +97,9 @@ export default function DriverTripPanel(p: Props) {
       />
       <ConfirmDialog
         visible={confirmEnd}
-        title='End trip early?'
+        title='Cancel this trip?'
         message={driver.passengers.length
-          ? 'Passengers still waiting go back to searching, anyone in your car is cancelled, and those dropped off stay completed.'
+          ? 'Passengers waiting or in your car will be cancelled and told. Anyone already dropped off stays completed.'
           : 'This ride will move to History.'}
         busy={ending}
         onYes={endEarly}

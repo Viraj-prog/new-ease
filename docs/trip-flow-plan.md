@@ -23,7 +23,7 @@ Differences that exist today. Settle each one when its screen is next changed:
 | --- | --- |
 | **Preview Route** is a pill; **Schedule Ride**, **Find driver** and popup buttons have squarer corners | plan page, route preview, popups |
 | **Preview Route** has white text in light mode; other blue buttons have dark text | same |
-| History rows press in with no ripple; other buttons ripple | whole app |
+| History rows and folder headings have no press effect; other buttons ripple | whole app |
 | Pending uses the older ride card; History uses the new rows | Scheduled Trips |
 
 Step 7 settled the last one: Pending now has its own card in the same style, and Scheduled Trips
@@ -35,8 +35,10 @@ buttons. The first three differences are still open.
 1. Searches expire 1 hour after their time. A driver is asked about an unstarted ride after 3 hours.
 2. One open search per rider per day. (This rules out separate morning and evening searches.)
 3. Navigation opens Google Maps with the **remaining** stops. The driver marks stops done.
-4. **End trip early:** riders still waiting go back to searching, riders in the car are marked
-   cancelled, riders already dropped off stay completed.
+4. **Cancelling a trip under way** (changed 2026-11-25): riders waiting or in the car are
+   cancelled, told in the app and taken to Home; they are not put back to searching. Riders
+   already dropped off stay completed. Needs `015`. Cancelling before the start still returns
+   riders to searching.
 5. Arrival: ask the driver to confirm when they return to the app near a stop. No background
    location tracking.
 

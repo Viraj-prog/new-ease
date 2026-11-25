@@ -72,7 +72,7 @@ export default function TripSheet(p: Props) {
         <View style={styles.tripEnds}>{stops}</View>
         {p.onEndEarly && (
           <Pressable onPress={p.onEndEarly} hitSlop={8} accessibilityRole='button'>
-            <Text style={[styles.link, { color: colors.alertText }]}>End trip early</Text>
+            <Text style={[styles.link, { color: colors.alertText }]}>Cancel trip</Text>
           </Pressable>
         )}
       </View>

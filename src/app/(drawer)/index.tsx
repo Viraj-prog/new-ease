@@ -202,9 +202,16 @@ export default function HomeScreen() {
   // The History tab sends a trip here to redo. It is read once, then cleared.
   const redoParams = useLocalSearchParams<{
     redo?: string; from?: string; to?: string; role?: string; resumeRequest?: string; resumeOffer?: string;
+    reset?: string;
   }>();
   useFocusEffect(
     useCallback(() => {
+      // The driver cancelled the trip under way: whatever was open gives way to Home.
+      if (redoParams.reset) {
+        router.setParams({ reset: undefined });
+        closePlan();
+        return;
+      }
       if (redoParams.resumeRequest) {
         const requestId = redoParams.resumeRequest;
         router.setParams({ resumeRequest: undefined, resumeOffer: undefined });
@@ -220,7 +227,7 @@ export default function HomeScreen() {
       router.setParams({ redo: undefined, from: undefined, to: undefined, role: undefined });
       redoTrip(from ?? '', to, role !== 'rider');
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [redoParams.redo, redoParams.resumeRequest]),
+    }, [redoParams.redo, redoParams.resumeRequest, redoParams.reset]),
   );
 
   // Post the trip being previewed. The preview goes away once it is posted.
