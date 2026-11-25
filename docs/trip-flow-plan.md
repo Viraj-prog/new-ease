@@ -26,6 +26,10 @@ Differences that exist today. Settle each one when its screen is next changed:
 | History rows press in with no ripple; other buttons ripple | whole app |
 | Pending uses the older ride card; History uses the new rows | Scheduled Trips |
 
+Step 7 settled the last one: Pending now has its own card in the same style, and Scheduled Trips
+uses the app's popup instead of the phone's. Step 10 replaced the last native alerts in the trip
+buttons. The first three differences are still open.
+
 ## Decisions
 
 1. Searches expire 1 hour after their time. A driver is asked about an unstarted ride after 3 hours.
@@ -65,16 +69,16 @@ Home; show driving and riding trips together in Pending; make Back leave the rid
 | # | Change | Main files | Database | Status |
 | --- | --- | --- | --- | --- |
 | 1 | Commit the current work; agree this plan | none | no | committed; plan awaiting Viraj |
-| 2 | Split the large Home screen without changing behaviour; remove unused `TripNavigation.tsx` and `RideStatusPopup.tsx` | `index.tsx`, new Home components | no | |
-| 3 | List open searches in Pending with Cancel | `rides.ts`, `useMyRides.ts`, `rides.tsx` | no | |
-| 4 | Close abandoned and duplicate searches; hide expired ones | `usePassengerFlow.ts`, `rides.ts`, Home | no | |
-| 5 | Add the trip-updates checker; replace the cancellation notices | new hook, drawer layout, recovery hook | no | |
-| 6 | Fix stale bookings and list all passengers | `useDriverFlow.ts`, `TripSheet.tsx`, `rides.ts` | no | |
-| 7 | Fix Home, Back and Pending flows | Home components, `rides.tsx` | no | |
-| 8 | Overdue ride popup, including forgotten in-progress trips | new component, drawer layout | no | |
-| 9 | Refuse expired requests and acceptances | migration `012` | **yes** | |
-| 10 | Stop progress, stop buttons, Resume and arrival prompt | migration `013`, lifecycle and Maps files | **yes** | |
-| 11 | End trip early; correct History for each rider | migration `014`, lifecycle and History files | **yes** | |
+| 2 | Split the large Home screen without changing behaviour; remove unused `TripNavigation.tsx` and `RideStatusPopup.tsx` | `index.tsx`, new Home components | no | committed |
+| 3 | List open searches in Pending with Cancel | `rides.ts`, `useMyRides.ts`, `rides.tsx` | no | committed |
+| 4 | Close abandoned and duplicate searches; hide expired ones | `usePassengerFlow.ts`, `rides.ts`, Home | no | committed |
+| 5 | Add the trip-updates checker; replace the cancellation notices | new hook, drawer layout, recovery hook | no | committed |
+| 6 | Fix stale bookings and list all passengers | `useDriverFlow.ts`, `TripSheet.tsx`, `rides.ts` | no | committed |
+| 7 | Fix Home, Back and Pending flows | Home components, `rides.tsx` | no | committed |
+| 8 | Overdue ride popup, including forgotten in-progress trips | new component, drawer layout | no | committed |
+| 9 | Refuse expired requests and acceptances | migration `012` | **yes** | committed; `012` run |
+| 10 | Stop progress, stop buttons, Resume and arrival prompt | migration `013`, lifecycle and Maps files | **yes** | committed; `013` run |
+| 11 | End trip early; correct History for each rider | migration `014`, lifecycle and History files | **yes** | committed; `014` run |
 | 12 | Test every case with two accounts; then plan push notifications | none | later | |
 
 Database steps (9 to 11): the script is written first, run by hand in the Supabase SQL editor, and
