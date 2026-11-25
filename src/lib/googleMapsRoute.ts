@@ -11,10 +11,16 @@ function coordinate({ lat, lng }: Pt) {
   return `${lat.toFixed(6)},${lng.toFixed(6)}`;
 }
 
-export function buildGoogleMapsLegs(start: Pt, destination: Pt, stops: readonly Pt[]): string[] {
+export function buildGoogleMapsLegs(
+  start: Pt,
+  destination: Pt,
+  stops: readonly Pt[],
+  // Resuming a trip: set off from wherever the driver is, even with no stops left.
+  fromDevice = false,
+): string[] {
   const targets = [...stops, destination].map(coordinate);
   // Omitting origin lets Google Maps start at the device location.
-  let origin = stops.length ? undefined : coordinate(start);
+  let origin = stops.length || fromDevice ? undefined : coordinate(start);
   const legs: string[] = [];
   for (let offset = 0; offset < targets.length; offset += MAX_WAYPOINTS + 1) {
     const targetsForLeg = targets.slice(offset, offset + MAX_WAYPOINTS + 1);

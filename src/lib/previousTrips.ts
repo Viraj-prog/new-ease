@@ -73,7 +73,7 @@ async function loadAsRider(userId: string, history: boolean): Promise<PreviousTr
   const query = supabase
     .from('ride_offers')
     .select(
-      `id, status, fare, cancelledByDriver, ride_requests!inner(*),
+      `id, status, fare, cancelledByDriver, noShowAt, ride_requests!inner(*),
        rides!inner ( rideId, driverStartLocation, driverEndLocation, departAt, pricePerKm, status,
                drivers ( users ( firstName, lastName ) ) )`,
     )
@@ -88,6 +88,7 @@ async function loadAsRider(userId: string, history: boolean): Promise<PreviousTr
     status: string;
     fare: number | null;
     cancelledByDriver: boolean;
+    noShowAt: string | null;
     ride_requests: RequestRow;
     rides: {
       driverStartLocation: string;
@@ -119,7 +120,8 @@ async function loadAsRider(userId: string, history: boolean): Promise<PreviousTr
     destinationPoint: { lat: r.ride_requests.dropoffLat, lng: r.ride_requests.dropoffLng },
     otherName: fullName(r.rides.drivers?.users, 'Driver'),
     statusLabel: history
-      ? r.cancelledByDriver ? 'Cancelled by driver' : isFinished(r) ? 'Completed' : 'Cancelled'
+      ? r.noShowAt ? 'No show'
+        : r.cancelledByDriver ? 'Cancelled by driver' : isFinished(r) ? 'Completed' : 'Cancelled'
       : undefined,
     reopenedRequestId: history && r.cancelledByDriver && r.ride_requests.status === 'open'
       && !isExpired(r.ride_requests.departAt) ? r.ride_requests.id : undefined,

@@ -10,6 +10,7 @@ type OfferState = {
   offer: string;
   ride: string;
   byDriver: boolean;
+  noShow: boolean;
   destination: string;
   // The driver's id (rider side) or the passenger's id (driver side), for the name.
   otherId: string;
@@ -34,6 +35,7 @@ type OfferRow = {
   id: string;
   status: string;
   cancelledByDriver: boolean;
+  noShowAt: string | null;
   ride_requests: { passengerId: string };
   rides: { driverId: string; status: string; driverEndLocation: string };
 };
@@ -42,7 +44,7 @@ export async function loadSnapshot(userId: string): Promise<Snapshot> {
   const since = new Date(Date.now() - WINDOW_MS).toISOString();
   const query = () => supabase
     .from('ride_offers')
-    .select(`id, status, cancelledByDriver, ride_requests!inner(passengerId),
+    .select(`id, status, cancelledByDriver, noShowAt, ride_requests!inner(passengerId),
              rides!inner(driverId, status, driverEndLocation, departAt)`)
     .gte('rides.departAt', since);
   const [asRider, asDriver] = await Promise.all([
@@ -60,6 +62,7 @@ export async function loadSnapshot(userId: string): Promise<Snapshot> {
         offer: r.status,
         ride: r.rides.status,
         byDriver: r.cancelledByDriver,
+        noShow: !!r.noShowAt,
         destination: r.rides.driverEndLocation,
         otherId: side === 'rider' ? r.rides.driverId : r.ride_requests.passengerId,
       };
@@ -75,6 +78,9 @@ function riderEvent(was: OfferState | undefined, now: OfferState): TripEvent | n
   const event = (kind: TripEvent['kind'], title: string, subtitle: string, order: number) =>
     ({ kind, title, subtitle, order, otherId: now.otherId });
 
+  if (now.noShow && !was?.noShow) {
+    return event('alert', 'Marked as a no show', `Your booking for the trip to ${now.destination} was cancelled.`, 0);
+  }
   if (now.byDriver && !was?.byDriver) {
     return event('alert', 'Your driver cancelled', 'Find another driver in Scheduled Trips.', 0);
   }
@@ -107,7 +113,7 @@ function driverEvent(was: OfferState | undefined, now: OfferState): TripEvent | 
   if (now.offer === 'pending' && was?.offer !== 'pending') {
     return event('success', 'New ride request', `{name} wants to join your trip to ${now.destination}`, 1);
   }
-  if (now.offer === 'cancelled' && !now.byDriver) {
+  if (now.offer === 'cancelled' && !now.byDriver && !now.noShow) {
     if (was?.offer === 'accepted') {
       return event('alert', 'A passenger cancelled', `They are off your trip to ${now.destination}.`, 0);
     }

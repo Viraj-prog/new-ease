@@ -4,6 +4,7 @@ import { buildGoogleMapsLegs } from './googleMapsRoute';
 import { getDrivingTimeMatrix, queuePlanningOsrmRequest } from './osrmTable';
 import { pickupPlanMatches, pickupPlanPoints, planPickupOrder, type PickupPassenger, type PickupStop } from './pickupPlanner';
 import { getRoute } from './routing';
+import type { StopProgress } from './stopProgress';
 import { supabase } from './supabase';
 
 export type RideStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
@@ -229,14 +230,21 @@ async function loadRequests(trip: Trip, driverId: string) {
       ? supabase.from('ride_requests').select(fields).eq('status', 'open').neq('passengerId', driverId)
         .gte('departAt', laterOf(from, searchCutoff())).lte('departAt', to)
       : Promise.resolve({ data: null, error: null }),
-    supabase.from('ride_offers').select(`status, fare, ride_requests!inner(${fields})`)
+    supabase.from('ride_offers')
+      .select(`status, fare, pickedUpAt, droppedOffAt, ride_requests!inner(${fields})`)
       .eq('rideId', trip.rideId),
   ]);
   if (searching.error) throw searching.error;
   if (offers.error) throw offers.error;
 
   type RequestRow = NonNullable<typeof searching.data>[number];
-  type OfferRow = { status: OfferStatus; fare: number | null; ride_requests: RequestRow };
+  type OfferRow = {
+    status: OfferStatus;
+    fare: number | null;
+    pickedUpAt: string | null;
+    droppedOffAt: string | null;
+    ride_requests: RequestRow;
+  };
   const linked = (offers.data ?? []) as unknown as OfferRow[];
   const offeredIds = new Set(linked.map((offer) => offer.ride_requests.id));
   const candidates = [
@@ -289,6 +297,11 @@ async function loadRequests(trip: Trip, driverId: string) {
     accepted: linked.filter((offer) => offer.status === 'accepted')
       .map((offer) => pickPlanningFields(offer.ride_requests))
       .sort((a, b) => a.id.localeCompare(b.id)),
+    progress: linked.filter((offer) => offer.status === 'accepted').map((offer): StopProgress => ({
+      requestId: offer.ride_requests.id,
+      pickedUpAt: offer.pickedUpAt,
+      droppedOffAt: offer.droppedOffAt,
+    })),
   };
 }
 
@@ -438,6 +451,8 @@ export type DriverRideState = {
   trip: Trip;
   requests: Req[];
   accepted: PlanningRequest[];
+  // What has happened to each accepted passenger once the trip is under way.
+  progress: StopProgress[];
   planError?: string;
 };
 
@@ -465,17 +480,17 @@ function reconcilePickupPlan(trip: Trip, accepted: readonly PlanningRequest[]) {
 }
 
 export async function loadDriverRideState(trip: Trip, driverId: string): Promise<DriverRideState> {
-  const { requests, accepted } = await loadRequests(trip, driverId);
+  const { requests, accepted, progress } = await loadRequests(trip, driverId);
   if (trip.status !== 'scheduled' || pickupPlanMatches(trip.plan, accepted)) {
-    return { trip, requests, accepted };
+    return { trip, requests, accepted, progress };
   }
   try {
     const plan = await reconcilePickupPlan(trip, accepted);
-    return { trip: { ...trip, plan }, requests, accepted };
+    return { trip: { ...trip, plan }, requests, accepted, progress };
   } catch (error) {
     const detail = (error as { message?: string } | null)?.message;
     return {
-      trip: { ...trip, plan: null }, requests, accepted,
+      trip: { ...trip, plan: null }, requests, accepted, progress,
       planError: detail ? `Could not update the pickup plan. ${detail}` : 'Could not update the pickup plan. Refresh to retry.',
     };
   }

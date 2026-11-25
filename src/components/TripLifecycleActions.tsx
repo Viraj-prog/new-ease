@@ -1,16 +1,16 @@
+import ConfirmDialog from '@/components/ConfirmDialog';
 import PressButton from '@/components/PressButton';
 import { useAuth } from '@/lib/auth';
 import { buildGoogleMapsLegs } from '@/lib/googleMapsRoute';
 import { useNotify } from '@/lib/notify';
 import { errText } from '@/lib/places';
 import { finishTrip, loadDriverTrip, startTrip, type RideStatus } from '@/lib/rides';
-import { secureStorage } from '@/lib/secureStorage';
+import { bookedStops, loadStopProgress } from '@/lib/stopProgress';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import * as Linking from 'expo-linking';
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   rideId: string;
@@ -24,13 +24,15 @@ type Props = {
   onChanged: (status: 'in_progress' | 'completed') => void;
 };
 
-async function loadDirections(rideId: string, driverId: string, storageKey: string) {
+// Directions through the stops still to do. Google Maps takes a few stops at a time, so this is
+// the next stretch; marking stops done moves it along.
+async function loadDirections(rideId: string, driverId: string, resuming: boolean) {
   const trip = await loadDriverTrip(rideId, driverId);
   if (trip?.status !== 'in_progress') throw new Error('This trip is no longer in progress.');
-  const legs = buildGoogleMapsLegs(trip.start, trip.destination, trip.plan?.stops ?? []);
-  const savedIndex = Number(await secureStorage.getItem(storageKey));
-  const index = Number.isInteger(savedIndex) && savedIndex >= 0 && savedIndex < legs.length ? savedIndex : 0;
-  return { legs, index };
+  const remaining = bookedStops(trip.plan?.stops ?? [], await loadStopProgress(rideId))
+    .filter((s) => !s.done)
+    .map((s) => s.stop);
+  return buildGoogleMapsLegs(trip.start, trip.destination, remaining, resuming)[0];
 }
 
 export default function TripLifecycleActions({ rideId, status, disabled, departAt, large, onChanged }: Props) {
@@ -39,8 +41,8 @@ export default function TripLifecycleActions({ rideId, status, disabled, departA
   const { colors } = useTheme();
   const notify = useNotify();
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<{ index: number; count: number } | null>(null);
-  const storageKey = `tripNavigation.${userId}.${rideId}`;
+  // Asking to finish: how many booked passengers are not marked as dropped off.
+  const [unmarked, setUnmarked] = useState<number | null>(null);
   // The clock, so Start trip unlocks by itself when the time comes.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -52,18 +54,7 @@ export default function TripLifecycleActions({ rideId, status, disabled, departA
   // To the minute: a 3:00 ride can be started from 3:00 on.
   const early = !!startsAt && now < Math.floor(startsAt.getTime() / 60000) * 60000;
 
-  useFocusEffect(useCallback(() => {
-    if (!userId || status !== 'in_progress') return;
-    let active = true;
-    loadDirections(rideId, userId, storageKey).then(({ index, legs }) => {
-      if (active) setProgress({ index, count: legs.length });
-    }).catch(() => {
-      // Resume can retry and surface the error when the driver asks for directions.
-    });
-    return () => { active = false; };
-  }, [rideId, status, storageKey, userId]));
-
-  async function openDirections(action: 'start' | 'resume' | 'next') {
+  async function openDirections(action: 'start' | 'resume') {
     if (!userId || busy || disabled) return;
     setBusy(true);
     let started = status === 'in_progress';
@@ -73,12 +64,7 @@ export default function TripLifecycleActions({ rideId, status, disabled, departA
         started = true;
         onChanged('in_progress');
       }
-      const { legs, index: saved } = await loadDirections(rideId, userId, storageKey);
-      const index = action === 'next' ? Math.min(saved + 1, legs.length - 1) : saved;
-      // Save before handing off to Maps, which can immediately background this app.
-      await secureStorage.setItem(storageKey, String(index));
-      setProgress({ index, count: legs.length });
-      await Linking.openURL(legs[index]);
+      await Linking.openURL(await loadDirections(rideId, userId, action === 'resume'));
     } catch (error) {
       notify({
         kind: 'alert',
@@ -96,7 +82,6 @@ export default function TripLifecycleActions({ rideId, status, disabled, departA
     try {
       await finishTrip(rideId);
       onChanged('completed');
-      await secureStorage.removeItem(storageKey).catch(() => {});
       notify({ kind: 'success', title: 'Trip finished' });
     } catch (error) {
       notify({ kind: 'alert', title: 'Could not finish trip', subtitle: errText(error) });
@@ -105,18 +90,10 @@ export default function TripLifecycleActions({ rideId, status, disabled, departA
     }
   }
 
-  function confirmFinish() {
-    Alert.alert('Finish this trip?', 'The ride will move to History.', [
-      { text: 'Keep driving', style: 'cancel' },
-      { text: 'Finish trip', onPress: () => void finish() },
-    ]);
-  }
-
-  function confirmNextLeg() {
-    Alert.alert('Open the next leg?', 'Continue after you reach the end of the current leg.', [
-      { text: 'Keep current leg', style: 'cancel' },
-      { text: 'Next leg', onPress: () => void openDirections('next') },
-    ]);
+  async function confirmFinish() {
+    // If the marks cannot be read, ask without the count.
+    const progress = await loadStopProgress(rideId).catch(() => []);
+    setUnmarked(progress.filter((p) => !p.droppedOffAt).length);
   }
 
   const unavailable = busy || disabled || !userId;
@@ -150,11 +127,6 @@ export default function TripLifecycleActions({ rideId, status, disabled, departA
 
   return (
     <View style={styles.actions}>
-      {progress && progress.count > 1 && (
-        <Text style={[styles.progress, { color: colors.textSecondary }]}>
-          Leg {progress.index + 1} of {progress.count}
-        </Text>
-      )}
       <View style={styles.row}>
         <PressButton
           disabled={unavailable}
@@ -166,16 +138,23 @@ export default function TripLifecycleActions({ rideId, status, disabled, departA
         <PressButton
           disabled={unavailable}
           style={[button, { backgroundColor: colors.success }]}
-          onPress={confirmFinish}
+          onPress={() => void confirmFinish()}
         >
           <Text style={[styles.label, { color: colors.onSuccess }]}>Finish trip</Text>
         </PressButton>
       </View>
-      {progress && progress.index + 1 < progress.count && (
-        <PressButton ghost disabled={unavailable} style={button} onPress={confirmNextLeg}>
-          <Text style={[styles.label, { color: colors.brand }]}>Next leg</Text>
-        </PressButton>
-      )}
+      <ConfirmDialog
+        visible={unmarked !== null}
+        title='Finish this trip?'
+        message={unmarked
+          ? `${unmarked === 1 ? '1 passenger is' : `${unmarked} passengers are`} not marked as dropped off. Finishing counts them as completed.`
+          : 'The ride will move to History.'}
+        onYes={() => {
+          setUnmarked(null);
+          void finish();
+        }}
+        onNo={() => setUnmarked(null)}
+      />
     </View>
   );
 }
@@ -186,6 +165,5 @@ const styles = StyleSheet.create({
   button: { flexGrow: 1, borderRadius: 22, minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   largeButton: { minHeight: 54, borderRadius: 18 },
   label: { fontFamily: fonts.semibold, fontSize: 15 },
-  progress: { fontFamily: fonts.medium, fontSize: 13 },
   hint: { fontFamily: fonts.regular, fontSize: 12, textAlign: 'center' },
 });

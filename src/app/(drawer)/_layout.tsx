@@ -1,4 +1,5 @@
 import Icon from '@/components/Icon';
+import ArrivalPrompt from '@/components/ArrivalPrompt';
 import LogoutPopup from '@/components/LogoutPopup';
 import OverdueTripPrompt from '@/components/OverdueTripPrompt';
 import { useProfile } from '@/hooks/useProfile';
@@ -124,6 +125,7 @@ export default function DrawerLayout() {
         }}
       />
       <OverdueTripPrompt userId={session?.user.id} />
+      <ArrivalPrompt userId={session?.user.id} />
     </>
   );
 }

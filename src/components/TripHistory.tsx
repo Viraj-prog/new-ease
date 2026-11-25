@@ -60,7 +60,9 @@ function TripRow({ trip, when, open, onToggle, onRedo, onFindAnother }: RowProps
     ? `${drove ? '+' : ''}${trip.estimated ? '~' : ''}$${trip.price.toFixed(2)}`
     : null;
   const person = trip.otherName ? `${drove ? 'Rider' : 'Driver'}: ${trip.otherName}` : 'No passenger';
-  const driverCancelled = trip.statusLabel === 'Cancelled by driver';
+  // Why it was cancelled, when there is more to say than that.
+  const reason = trip.statusLabel === 'Cancelled by driver' || trip.statusLabel === 'No show'
+    ? trip.statusLabel : null;
   // The whole card is read as one control, so what shows when it is open is part of its label.
   const spoken = [
     `${finished ? 'Finished' : 'Cancelled'} trip to ${trip.end}`,
@@ -69,7 +71,7 @@ function TripRow({ trip, when, open, onToggle, onRedo, onFindAnother }: RowProps
     price,
     open && `From ${trip.start}`,
     open && person,
-    open && driverCancelled && trip.statusLabel,
+    open && reason,
   ].filter(Boolean).join(', ');
 
   return (
@@ -135,7 +137,7 @@ function TripRow({ trip, when, open, onToggle, onRedo, onFindAnother }: RowProps
             <Text style={styles.stopText}>{trip.end}</Text>
           </View>
           <Text style={styles.person}>{person}</Text>
-          {driverCancelled && <Text style={styles.person}>{trip.statusLabel}</Text>}
+          {reason && <Text style={styles.person}>{reason}</Text>}
           {onFindAnother && (
             <PressButton ripple={false} style={styles.findAnother} onPress={onFindAnother}>
               <Text style={styles.findAnotherText}>Find another driver</Text>

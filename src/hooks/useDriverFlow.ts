@@ -11,6 +11,7 @@ import {
   type Trip,
   type DriverRideState,
 } from '@/lib/rides';
+import { bookedStops, markStop, type StopMark } from '@/lib/stopProgress';
 import { useFocusEffect, useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDriverRequestEstimates } from './useDriverRequestEstimates';
@@ -22,6 +23,8 @@ export function useDriverFlow(userId: string | undefined, active = true) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [rideState, setRideState] = useState<DriverRideState | null>(null);
   const [responding, setResponding] = useState(false);
+  // The stop mark being saved.
+  const [marking, setMarking] = useState<StopMark | null>(null);
   const focused = useIsFocused();
   const loadRevision = useRef(0);
   const tripId = trip?.rideId;
@@ -193,6 +196,21 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     }
   }
 
+  // Trip under way: record what happened at a stop, then read the trip again.
+  async function mark(requestId: string, stopMark: StopMark) {
+    if (!trip || trip.status !== 'in_progress' || marking) return;
+    setMarking(stopMark);
+    setAcceptError(null);
+    try {
+      await markStop(trip.rideId, requestId, stopMark);
+      await refreshRequests(trip.rideId);
+    } catch (e) {
+      setAcceptError({ message: errText(e) });
+    } finally {
+      setMarking(null);
+    }
+  }
+
   function markStarted() {
     if (!trip) return;
     setAcceptError(null);
@@ -206,6 +224,13 @@ export function useDriverFlow(userId: string | undefined, active = true) {
   // cancels drops off the list.
   const passengers = requests.filter((r) => r.status === 'accepted')
     .map((r) => ({ id: r.id, name: r.passengerName }));
+  // The stops of a trip under way, with who each one is for.
+  const stops = trip?.status === 'in_progress' && currentRide
+    ? bookedStops(trip.plan?.stops ?? [], currentRide.progress).map((s) => ({
+        ...s,
+        name: passengers.find((p) => p.id === s.stop.requestId)?.name ?? 'your passenger',
+      }))
+    : [];
   const visible = trip?.status === 'scheduled'
     ? requests.filter((r) => r.status !== 'accepted' && estimates.visibleIds.has(r.id)) : [];
   // The request shown in the popup: a tapped dot first, else the first waiting request.
@@ -233,6 +258,7 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     popupEstimate: popup ? estimates.getEstimate(popup) : undefined,
     retryChecks: estimates.retryChecks,
     retryPlan: tripId ? () => void refreshRequests(tripId) : undefined,
+    stops, marking, mark,
     post, respond, clear, clearMessage, sync, closePopup, markStarted,
   };
 }

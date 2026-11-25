@@ -2,6 +2,7 @@ import InlineNotice from '@/components/InlineNotice';
 import { PlannedRouteSummary } from '@/components/RoutePreview';
 import TripLifecycleActions from '@/components/TripLifecycleActions';
 import TripSheet from '@/components/TripSheet';
+import { NextStop, StopChecklist } from '@/components/TripStops';
 import type { useDriverFlow } from '@/hooks/useDriverFlow';
 import type { Req, Trip } from '@/lib/rides';
 
@@ -52,6 +53,8 @@ export default function DriverTripPanel(p: Props) {
         onDecline={() => p.onAnswer(false)}
         onNotNow={driver.closePopup}
         inProgress={inProgress}
+        nextStop={<NextStop stops={driver.stops} busy={driver.marking} onMark={driver.mark} />}
+        stopList={<StopChecklist stops={driver.stops} />}
         lifecycleActions={
           <TripLifecycleActions
             key={trip.rideId}

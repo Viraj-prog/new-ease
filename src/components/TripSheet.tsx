@@ -29,6 +29,9 @@ type Props = {
   onNotNow: () => void;
   inProgress: boolean;
   lifecycleActions: ReactNode;
+  // Trip under way: the stop to do next, and the list of all of them.
+  nextStop?: ReactNode;
+  stopList?: ReactNode;
   onCancel?: () => void;
   onScheduleAnother: () => void;
 };
@@ -62,8 +65,10 @@ export default function TripSheet(p: Props) {
   if (p.inProgress) {
     return (
       <View>
-        {stops}
+        {p.nextStop}
         <View style={styles.row}>{p.lifecycleActions}</View>
+        {p.stopList ?? null}
+        <View style={styles.tripEnds}>{stops}</View>
       </View>
     );
   }
@@ -211,6 +216,7 @@ const makeStyles = (c: Colors) =>
     message: { fontFamily: fonts.regular, fontSize: 12, color: c.textSecondary, marginTop: 4 },
     divider: { height: 1, backgroundColor: c.border, marginBottom: 10 },
     row: { flexDirection: 'row', gap: 12, marginTop: 8 },
+    tripEnds: { marginTop: 12 },
     half: { flex: 1 },
     button: { flex: 1, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
     buttonText: { fontFamily: fonts.semibold, fontSize: 17 },
