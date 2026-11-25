@@ -20,7 +20,7 @@ export default function OverdueTripPrompt({ userId }: { userId: string | undefin
   const notify = useNotify();
   const [ride, setRide] = useState<OverdueRide | null>(null);
   const [cancelling, setCancelling] = useState(false);
-  // Rides answered with "Later": not asked about again until the app is reopened.
+  // Questions already answered, as "rideId:status": not asked again until the app is reopened.
   const skipped = useRef(new Set<string>());
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export default function OverdueTripPrompt({ userId }: { userId: string | undefin
   }, [userId]);
 
   function later() {
-    if (ride) skipped.current.add(ride.rideId);
+    if (ride) skipped.current.add(`${ride.rideId}:${ride.status}`);
     setRide(null);
   }
 

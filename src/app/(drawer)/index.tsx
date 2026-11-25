@@ -134,6 +134,8 @@ export default function HomeScreen() {
   if (tripId !== seenTripId) {
     setSeenTripId(tripId);
     if (tripId && view === 'home') setView('trip');
+    // The ride on screen was closed from somewhere else, such as the overdue popup.
+    if (!tripId && view === 'trip') setView('home');
   }
 
   // The ride gets the taller sheet. A ride found as the app opens can arrive before the sheet has
@@ -141,6 +143,7 @@ export default function HomeScreen() {
   const [sheetShown, setSheetShown] = useState(false);
   useEffect(() => {
     if (tripId && view === 'trip') sheetRef.current?.snapToIndex(SNAP.TRIP);
+    else if (view === 'home') sheetRef.current?.snapToIndex(SNAP.MID);
   }, [tripId, view, sheetShown]);
 
   // Rider: look for drivers on the previewed route. The list takes over the screen when found.

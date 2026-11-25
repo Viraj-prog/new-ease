@@ -757,7 +757,8 @@ export type OverdueRide = {
 };
 
 // Driver: their oldest open ride that is long past its time. One never started is overdue some
-// hours after it was due to leave; one under way, some hours after it should have arrived.
+// hours after it was due to leave; one under way, some hours after it should have arrived. `skip`
+// holds "rideId:status", so a ride answered before it started is asked about again once under way.
 export async function loadOverdueRide(driverId: string, skip: ReadonlySet<string>): Promise<OverdueRide | null> {
   if (!isUuid(driverId)) return null;
   const { data, error } = await supabase
@@ -778,7 +779,7 @@ export async function loadOverdueRide(driverId: string, skip: ReadonlySet<string
     plan: { durationMin?: number } | null;
   };
   const found = ((data ?? []) as unknown as Row[]).find((r) => {
-    if (skip.has(r.rideId)) return false;
+    if (skip.has(`${r.rideId}:${r.status}`)) return false;
     if (r.status !== 'in_progress') return true;
     const minutes = Math.max(r.route?.durationMin ?? 0, r.plan?.durationMin ?? 0);
     return Date.parse(r.departAt) + minutes * 60000 + OVERDUE_MS < Date.now();

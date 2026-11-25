@@ -143,6 +143,7 @@ export function useDriverFlow(userId: string | undefined, active = true) {
       if (!latest) {
         // It was finished or cancelled somewhere else.
         if (loadRevision.current === revision) {
+          setMsg('');
           setTrip((shown) => shown?.rideId === rideId ? null : shown);
           setRideState(null);
         }
