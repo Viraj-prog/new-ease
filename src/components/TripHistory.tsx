@@ -75,11 +75,11 @@ function TripRow({ trip, when, open, onToggle, onRedo, onFindAnother }: RowProps
   ].filter(Boolean).join(', ');
 
   return (
-    // The whole card opens and closes the trip, so all of it presses in. The buttons inside
-    // take their own presses.
+    // The whole card opens and closes the trip, with no press effect. The buttons inside take
+    // their own presses.
     <PressButton
       ripple={false}
-      pressScale={0.98}
+      pressScale={1}
       style={styles.card}
       onPress={onToggle}
       accessibilityRole='button'
@@ -182,7 +182,7 @@ export default function TripHistory({ trips, onRedo, onFindAnother }: Props) {
           <View key={folder.key}>
             <PressButton
               ripple={false}
-              pressScale={0.98}
+              pressScale={1}
               style={styles.folder}
               onPress={() => setChosen((c) => ({ ...c, [folder.key]: !open }))}
               accessibilityRole='button'

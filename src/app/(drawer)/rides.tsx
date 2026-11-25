@@ -156,7 +156,6 @@ export default function RidesScreen() {
         status={!accepted ? 'waiting' : ride.rideStatus === 'in_progress' ? 'in_progress' : 'booked'}
         title={ride.end}
         from={ride.start}
-        note={`Driver: ${ride.driver.name}`}
         when={whenText(ride.departAt)}
         actions={[
           {
