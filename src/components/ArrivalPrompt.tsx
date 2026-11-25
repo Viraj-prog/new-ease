@@ -40,11 +40,12 @@ async function findArrival(driverId: string): Promise<Arrival | null> {
   if (!here) return null;
 
   const stops = bookedStops(trip.plan?.stops ?? [], await loadStopProgress(trip.rideId));
-  const near = stops.find((s) => !s.done && (s.stop.type === 'pickup' || s.pickedUp)
-    && haversineKm(here, s.stop) <= ARRIVE_KM);
-  if (near) {
-    const name = await loadPassengerName(near.stop.requestId);
-    return { rideId: trip.rideId, kind: near.stop.type, requestId: near.stop.requestId, name };
+  // Only the next stop in the plan: a later one at the same place has its turn after it, so a
+  // passenger is not picked up out of order.
+  const next = stops.find((s) => !s.done);
+  if (next && haversineKm(here, next.stop) <= ARRIVE_KM) {
+    const name = await loadPassengerName(next.stop.requestId);
+    return { rideId: trip.rideId, kind: next.stop.type, requestId: next.stop.requestId, name };
   }
   return stops.every((s) => s.done) && haversineKm(here, trip.destination) <= ARRIVE_KM
     ? { rideId: trip.rideId, kind: 'finish' }
