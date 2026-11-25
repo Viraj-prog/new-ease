@@ -11,6 +11,8 @@ type OfferState = {
   ride: string;
   byDriver: boolean;
   noShow: boolean;
+  pickedUp: boolean;
+  endedEarly: boolean;
   destination: string;
   // The driver's id (rider side) or the passenger's id (driver side), for the name.
   otherId: string;
@@ -36,16 +38,17 @@ type OfferRow = {
   status: string;
   cancelledByDriver: boolean;
   noShowAt: string | null;
+  pickedUpAt: string | null;
   ride_requests: { passengerId: string };
-  rides: { driverId: string; status: string; driverEndLocation: string };
+  rides: { driverId: string; status: string; driverEndLocation: string; endedEarlyAt: string | null };
 };
 
 export async function loadSnapshot(userId: string): Promise<Snapshot> {
   const since = new Date(Date.now() - WINDOW_MS).toISOString();
   const query = () => supabase
     .from('ride_offers')
-    .select(`id, status, cancelledByDriver, noShowAt, ride_requests!inner(passengerId),
-             rides!inner(driverId, status, driverEndLocation, departAt)`)
+    .select(`id, status, cancelledByDriver, noShowAt, pickedUpAt, ride_requests!inner(passengerId),
+             rides!inner(driverId, status, driverEndLocation, departAt, endedEarlyAt)`)
     .gte('rides.departAt', since);
   const [asRider, asDriver] = await Promise.all([
     query().eq('ride_requests.passengerId', userId),
@@ -63,6 +66,8 @@ export async function loadSnapshot(userId: string): Promise<Snapshot> {
         ride: r.rides.status,
         byDriver: r.cancelledByDriver,
         noShow: !!r.noShowAt,
+        pickedUp: !!r.pickedUpAt,
+        endedEarly: !!r.rides.endedEarlyAt,
         destination: r.rides.driverEndLocation,
         otherId: side === 'rider' ? r.rides.driverId : r.ride_requests.passengerId,
       };
@@ -82,7 +87,12 @@ function riderEvent(was: OfferState | undefined, now: OfferState): TripEvent | n
     return event('alert', 'Marked as a no show', `Your booking for the trip to ${now.destination} was cancelled.`, 0);
   }
   if (now.byDriver && !was?.byDriver) {
-    return event('alert', 'Your driver cancelled', 'Find another driver in Scheduled Trips.', 0);
+    // Someone already in the car has nothing left to search for.
+    if (now.pickedUp) {
+      return event('alert', 'Your driver ended the trip', `Your ride to ${now.destination} was cancelled.`, 0);
+    }
+    return event('alert', now.endedEarly ? 'Your driver ended the trip' : 'Your driver cancelled',
+      'Find another driver in Scheduled Trips.', 0);
   }
   if (now.offer === 'accepted') {
     if (was?.offer !== 'accepted') {

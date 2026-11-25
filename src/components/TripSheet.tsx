@@ -32,6 +32,7 @@ type Props = {
   // Trip under way: the stop to do next, and the list of all of them.
   nextStop?: ReactNode;
   stopList?: ReactNode;
+  onEndEarly?: () => void;
   onCancel?: () => void;
   onScheduleAnother: () => void;
 };
@@ -69,6 +70,11 @@ export default function TripSheet(p: Props) {
         <View style={styles.row}>{p.lifecycleActions}</View>
         {p.stopList ?? null}
         <View style={styles.tripEnds}>{stops}</View>
+        {p.onEndEarly && (
+          <Pressable onPress={p.onEndEarly} hitSlop={8} accessibilityRole='button'>
+            <Text style={[styles.link, { color: colors.alertText }]}>End trip early</Text>
+          </Pressable>
+        )}
       </View>
     );
   }

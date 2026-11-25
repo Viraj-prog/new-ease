@@ -49,3 +49,10 @@ export async function markStop(rideId: string, requestId: string, mark: StopMark
   const { error } = await supabase.rpc('mark_stop', { ride_id: rideId, request_id: requestId, mark });
   if (error) throw error;
 }
+
+// Driver: end a trip under way. Riders dropped off stay completed, riders in the car are
+// cancelled, and riders still waiting go back to searching.
+export async function endTripEarly(rideId: string) {
+  const { error } = await supabase.rpc('end_trip_early', { ride_id: rideId });
+  if (error) throw error;
+}

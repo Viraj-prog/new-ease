@@ -1,10 +1,15 @@
+import ConfirmDialog from '@/components/ConfirmDialog';
 import InlineNotice from '@/components/InlineNotice';
 import { PlannedRouteSummary } from '@/components/RoutePreview';
 import TripLifecycleActions from '@/components/TripLifecycleActions';
 import TripSheet from '@/components/TripSheet';
 import { NextStop, StopChecklist } from '@/components/TripStops';
 import type { useDriverFlow } from '@/hooks/useDriverFlow';
+import { useNotify } from '@/lib/notify';
+import { errText } from '@/lib/places';
 import type { Req, Trip } from '@/lib/rides';
+import { endTripEarly } from '@/lib/stopProgress';
+import { useState } from 'react';
 
 type Props = {
   driver: ReturnType<typeof useDriverFlow>;
@@ -14,6 +19,7 @@ type Props = {
   // Accept or decline a request: the one in the popup unless another is given.
   onAnswer: (accept: boolean, request?: Req) => void;
   onStarted: () => void;
+  // The trip was finished, or ended early.
   onFinished: () => void;
   onCancel: () => void;
   onScheduleAnother: () => void;
@@ -25,6 +31,25 @@ export default function DriverTripPanel(p: Props) {
   const { driver, trip } = p;
   const inProgress = trip.status === 'in_progress';
   const retryPassenger = driver.acceptError?.retry;
+  const notify = useNotify();
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [ending, setEnding] = useState(false);
+
+  async function endEarly() {
+    setEnding(true);
+    try {
+      await endTripEarly(trip.rideId);
+      setConfirmEnd(false);
+      notify({ kind: 'success', title: 'Trip ended' });
+      p.onFinished();
+    } catch (e) {
+      console.error(e);
+      setConfirmEnd(false);
+      notify({ kind: 'alert', title: 'Could not end the trip', subtitle: errText(e) });
+    } finally {
+      setEnding(false);
+    }
+  }
 
   return (
     <>
@@ -55,6 +80,7 @@ export default function DriverTripPanel(p: Props) {
         inProgress={inProgress}
         nextStop={<NextStop stops={driver.stops} busy={driver.marking} onMark={driver.mark} />}
         stopList={<StopChecklist stops={driver.stops} />}
+        onEndEarly={() => setConfirmEnd(true)}
         lifecycleActions={
           <TripLifecycleActions
             key={trip.rideId}
@@ -68,6 +94,16 @@ export default function DriverTripPanel(p: Props) {
         }
         onCancel={inProgress ? undefined : p.onCancel}
         onScheduleAnother={p.onScheduleAnother}
+      />
+      <ConfirmDialog
+        visible={confirmEnd}
+        title='End trip early?'
+        message={driver.passengers.length
+          ? 'Passengers still waiting go back to searching, anyone in your car is cancelled, and those dropped off stay completed.'
+          : 'This ride will move to History.'}
+        busy={ending}
+        onYes={endEarly}
+        onNo={() => setConfirmEnd(false)}
       />
     </>
   );
