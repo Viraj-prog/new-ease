@@ -9,6 +9,8 @@ type Props = Omit<PressableProps, 'style'> & {
   ghost?: boolean;
   // How far it shrinks while pressed (1 = not at all). Wide rows use a gentler value.
   pressScale?: number;
+  // false = press in only, with no ripple.
+  ripple?: boolean;
 };
 
 // A button that feels real: it shrinks slightly while pressed, springs back when let go, and
@@ -17,6 +19,7 @@ export default function PressButton({
   style,
   ghost = false,
   pressScale = 0.96,
+  ripple = true,
   onPressIn,
   onPressOut,
   ...rest
@@ -27,10 +30,10 @@ export default function PressButton({
   return (
     <AnimatedPressable
       {...rest}
-      android_ripple={{
+      android_ripple={ripple ? {
         color: ghost ? 'rgba(128,128,128,0.28)' : 'rgba(255,255,255,0.35)',
         foreground: true,
-      }}
+      } : undefined}
       onPressIn={(e) => {
         scale.set(withTiming(pressScale, { duration: 90 }));
         onPressIn?.(e);

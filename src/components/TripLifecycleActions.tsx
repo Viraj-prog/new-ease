@@ -106,7 +106,7 @@ export default function TripLifecycleActions({ rideId, status, disabled, departA
   }
 
   function confirmFinish() {
-    Alert.alert('Finish this trip?', 'The ride will move to Previous Trips and History.', [
+    Alert.alert('Finish this trip?', 'The ride will move to History.', [
       { text: 'Keep driving', style: 'cancel' },
       { text: 'Finish trip', onPress: () => void finish() },
     ]);

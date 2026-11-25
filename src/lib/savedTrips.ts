@@ -53,6 +53,9 @@ export async function deleteSavedPlace(id: string) {
   if (error) throw error;
 }
 
+// How many of those places the "Recent trips" lists show on Home and the plan page.
+export const RECENT_TRIPS_SHOWN = 2;
+
 // Where the user most recently finished a trip to, newest first, each place once.
 export async function loadRecentPlaces(userId: string, limit = 5): Promise<RecentPlace[]> {
   const trips = await loadPreviousTrips(userId);

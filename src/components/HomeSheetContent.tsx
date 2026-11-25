@@ -1,6 +1,6 @@
 import Icon from '@/components/Icon';
 import { slotItems } from '@/lib/savedSlots';
-import type { RecentPlace, SavedPlace } from '@/lib/savedTrips';
+import { RECENT_TRIPS_SHOWN, type RecentPlace, type SavedPlace } from '@/lib/savedTrips';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
@@ -28,7 +28,7 @@ export default function HomeSheetContent({ recent, saved, onPickRecent, onPickSa
     <View>
       <Text style={styles.heading}>Recent trips</Text>
       {recent.length === 0 && <Text style={styles.empty}>Trips you book or post will show up here.</Text>}
-      {recent.map((r) => (
+      {recent.slice(0, RECENT_TRIPS_SHOWN).map((r) => (
         <PressButton ghost pressScale={0.98} key={r.address} style={styles.recentRow} onPress={() => onPickRecent(r.address)}>
           <View style={styles.recentCircle}>
             <Icon name='clock' size={20} color={colors.textSecondary} />

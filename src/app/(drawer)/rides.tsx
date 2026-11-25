@@ -1,12 +1,11 @@
 import MenuButton from '@/components/MenuButton';
 import PersonPopup, { type Person } from '@/components/PersonPopup';
-import PreviousTripCard from '@/components/PreviousTripCard';
 import RideBox from '@/components/RideBox';
 import SegmentedToggle, { type ToggleOption } from '@/components/SegmentedToggle';
+import TripHistory from '@/components/TripHistory';
 import TripLifecycleActions from '@/components/TripLifecycleActions';
 import { useMyRides } from '@/hooks/useMyRides';
 import { useAuth } from '@/lib/auth';
-import { avatarSlot } from '@/lib/driverExtras';
 import type { PreviousTrip } from '@/lib/previousTrips';
 import { isActiveRide, type BookedRide, type RideStatus } from '@/lib/rides';
 import { useTheme } from '@/lib/theme';
@@ -28,10 +27,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotify } from '@/lib/notify';
 import InlineNotice from '@/components/InlineNotice';
 
-type RideTab = 'pending' | 'previous' | 'history';
+type RideTab = 'pending' | 'history';
 const tabs: ToggleOption<RideTab>[] = [
   { key: 'pending', label: 'Pending', icon: 'calendar' },
-  { key: 'previous', label: 'Previous Trips', icon: 'check-circle' },
   { key: 'history', label: 'History', icon: 'clock' },
 ];
 const statusLabels: Record<RideStatus, string> = {
@@ -74,7 +72,7 @@ export default function RidesScreen() {
   const notify = useNotify();
   const { session, driverMode } = useAuth();
   const [tab, setTab] = useState<RideTab>('pending');
-  const { posted, booked, trips, history, loading, error, reload, cancelPosted, cancelBooked } =
+  const { posted, booked, history, loading, error, reload, cancelPosted, cancelBooked } =
     useMyRides(session?.user.id, !driverMode && tab === 'pending');
   const redoCount = useRef(0);
   const [person, setPerson] = useState<Person | null>(null);
@@ -102,7 +100,12 @@ export default function RidesScreen() {
   }
 
   const currentBookings = booked.filter(isCurrentBooking);
-  const cards = tab === 'previous' ? trips : history;
+
+  // A ride may have ended since the screen loaded, so History is read again when it is opened.
+  function openTab(next: RideTab) {
+    setTab(next);
+    if (next === 'history') void reload();
+  }
 
   function redo(trip: PreviousTrip) {
     router.navigate({
@@ -113,6 +116,14 @@ export default function RidesScreen() {
         to: trip.end,
         role: trip.role,
       },
+    });
+  }
+
+  // The driver cancelled: go Home and carry on with the same search.
+  function findAnother(trip: PreviousTrip) {
+    router.navigate({
+      pathname: '/',
+      params: { resumeRequest: trip.reopenedRequestId, resumeOffer: trip.reopenedOfferId },
     });
   }
 
@@ -150,7 +161,7 @@ export default function RidesScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Text style={styles.title}>Scheduled Trips</Text>
-        <SegmentedToggle textOnly style={styles.tabs} options={tabs} value={tab} onChange={setTab} />
+        <SegmentedToggle textOnly style={styles.tabs} options={tabs} value={tab} onChange={openTab} />
 
         {loading ? (
           <ActivityIndicator color={colors.brand} style={styles.loading} />
@@ -158,26 +169,11 @@ export default function RidesScreen() {
           <>
             {!!error && <InlineNotice message={error} style={styles.error} />}
 
-            {tab !== 'pending' ? (
-              cards.length > 0 ? (
-                <View style={styles.list}>
-                  {cards.map((trip, index) => (
-                    <PreviousTripCard
-                      key={trip.key}
-                      trip={trip}
-                      avatarIndex={avatarSlot(index)}
-                      onRedo={() => redo(trip)}
-                      onFindAnother={trip.reopenedRequestId ? () => router.navigate({
-                        pathname: '/',
-                        params: { resumeRequest: trip.reopenedRequestId, resumeOffer: trip.reopenedOfferId },
-                      }) : undefined}
-                    />
-                  ))}
-                </View>
+            {tab === 'history' ? (
+              history.length > 0 ? (
+                <TripHistory trips={history} onRedo={redo} onFindAnother={findAnother} />
               ) : !error && (
-                <Text style={styles.empty}>
-                  {tab === 'previous' ? 'Rides you have finished will show up here.' : 'You have no ride history.'}
-                </Text>
+                <Text style={styles.empty}>Finished and cancelled rides will show up here.</Text>
               )
             ) : driverMode ? (
                 posted.length === 0 ? (
@@ -208,7 +204,7 @@ export default function RidesScreen() {
                         : undefined}
                       >
                         <TripLifecycleActions rideId={r.rideId} status={r.status} departAt={r.departAt} onChanged={(status) => {
-                          if (status === 'completed') setTab('previous');
+                          if (status === 'completed') setTab('history');
                           void reload();
                         }} />
                       </RideBox>

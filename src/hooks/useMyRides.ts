@@ -1,5 +1,5 @@
 import { errText } from '@/lib/places';
-import { loadPreviousTrips, loadRideHistory, type PreviousTrip } from '@/lib/previousTrips';
+import { loadRideHistory, type PreviousTrip } from '@/lib/previousTrips';
 import {
   cancelBooking,
   cancelPostedRide,
@@ -15,7 +15,6 @@ import { useCallback, useState } from 'react';
 export function useMyRides(userId: string | undefined, watchBookings: boolean) {
   const [posted, setPosted] = useState<PostedRide[]>([]);
   const [booked, setBooked] = useState<BookedRide[]>([]);
-  const [trips, setTrips] = useState<PreviousTrip[]>([]);
   const [history, setHistory] = useState<PreviousTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -23,15 +22,13 @@ export function useMyRides(userId: string | undefined, watchBookings: boolean) {
   const reload = useCallback(async () => {
     if (!userId) return;
     try {
-      const [p, b, previousCards, historyCards] = await Promise.all([
+      const [p, b, historyCards] = await Promise.all([
         loadPostedRides(userId),
         loadBookedRides(userId),
-        loadPreviousTrips(userId),
         loadRideHistory(userId),
       ]);
       setPosted(p);
       setBooked(b);
-      setTrips(previousCards);
       setHistory(historyCards);
       setError('');
     } catch (e) {
@@ -91,5 +88,5 @@ export function useMyRides(userId: string | undefined, watchBookings: boolean) {
     }
   }
 
-  return { posted, booked, trips, history, loading, error, reload, cancelPosted, cancelBooked };
+  return { posted, booked, history, loading, error, reload, cancelPosted, cancelBooked };
 }

@@ -97,7 +97,17 @@ async function loadAsRider(userId: string, history: boolean): Promise<PreviousTr
     };
   };
 
-  return ((data ?? []) as unknown as Row[]).map((r) => ({
+  const isFinished = (r: Row) => r.status === 'accepted' && r.rides.status === 'completed';
+  // History holds only finished and cancelled trips. Live requests are under Pending, and ones
+  // that were declined, or lost to another driver, never became a trip.
+  const inHistory = (r: Row) => {
+    if (r.cancelledByDriver || r.status === 'cancelled') return true;
+    if (r.status === 'taken') return false;
+    return r.rides.status === 'cancelled' || isFinished(r);
+  };
+  const rows = ((data ?? []) as unknown as Row[]).filter((r) => !history || inHistory(r));
+
+  return rows.map((r) => ({
     key: `rider-${r.id}`,
     role: 'rider' as const,
     start: r.rides.driverStartLocation,
@@ -107,7 +117,7 @@ async function loadAsRider(userId: string, history: boolean): Promise<PreviousTr
     destinationPoint: { lat: r.ride_requests.dropoffLat, lng: r.ride_requests.dropoffLng },
     otherName: fullName(r.rides.drivers?.users, 'Driver'),
     statusLabel: history
-      ? r.cancelledByDriver ? 'Cancelled by driver' : historyLabel(r.rides.status, r.status)
+      ? r.cancelledByDriver ? 'Cancelled by driver' : isFinished(r) ? 'Completed' : 'Cancelled'
       : undefined,
     reopenedRequestId: history && r.cancelledByDriver && r.ride_requests.status === 'open'
       ? r.ride_requests.id : undefined,
@@ -119,22 +129,16 @@ async function loadAsRider(userId: string, history: boolean): Promise<PreviousTr
   }));
 }
 
-function historyLabel(rideStatus: string, requestStatus?: string) {
-  if (rideStatus === 'cancelled' || requestStatus === 'cancelled') return 'Cancelled';
-  if (requestStatus === 'declined') return 'Declined';
-  if (requestStatus === 'taken') return 'Closed';
-  if (requestStatus === 'pending') return 'Pending';
-  if (rideStatus === 'completed') return 'Completed';
-  return rideStatus === 'in_progress' ? 'In progress' : 'Pending';
-}
-
 async function loadAsDriver(userId: string, history: boolean): Promise<PreviousTrip[]> {
   const query = supabase
     .from('rides')
     .select('rideId, driverStartLocation, driverEndLocation, departAt, endLat, endLng, pricePerKm, status')
     .eq('driverId', userId)
     .order('departAt', { ascending: false, nullsFirst: false });
-  const { data: rides, error } = await (history ? query : query.eq('status', 'completed'));
+  // History holds only rides that have ended; scheduled and in-progress ones are under Pending.
+  const { data: rides, error } = await (history
+    ? query.in('status', ['completed', 'cancelled'])
+    : query.eq('status', 'completed'));
   if (error) throw error;
   if (!rides?.length) return [];
 
@@ -173,7 +177,7 @@ async function loadAsDriver(userId: string, history: boolean): Promise<PreviousT
         destinationPoint:
           ride.endLat != null && ride.endLng != null ? { lat: ride.endLat, lng: ride.endLng } : null,
         otherName: r ? fullName(person || null, 'Passenger') : null,
-        statusLabel: history ? historyLabel(ride.status) : undefined,
+        statusLabel: history ? (ride.status === 'completed' ? 'Completed' : 'Cancelled') : undefined,
         ...(r ? priceOf({
           ...r, price: offer?.fare ?? (offer?.status === 'accepted' ? r.price : null),
         }, ride.pricePerKm) : { price: null, estimated: false }),

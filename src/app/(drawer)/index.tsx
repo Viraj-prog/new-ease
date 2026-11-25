@@ -10,6 +10,7 @@ import InteractiveMap, { type MapMarker } from '@/components/map';
 import MapTitleChip from '@/components/MapTitleChip';
 import MenuButton from '@/components/MenuButton';
 import PlanForm from '@/components/PlanForm';
+import PriceModal from '@/components/PriceModal';
 import RoutePreview, { PlannedRouteSummary } from '@/components/RoutePreview';
 import SearchPill from '@/components/SearchPill';
 import TripLifecycleActions from '@/components/TripLifecycleActions';
@@ -75,7 +76,8 @@ export default function HomeScreen() {
   const [when, setWhen] = useState<Date | null>(null); // null = leave now
   const [mdd, setMdd] = useState(2);
   const [pricePerKm, setPricePerKm] = useState<number | null>(null);
-  const [mddOpen, setMddOpen] = useState(false);
+  // Which driver setting's popup is open, if any.
+  const [editing, setEditing] = useState<'mdd' | 'price' | null>(null);
   // 'home' shows recent / saved trips; 'plan' shows the search form and results.
   const [view, setView] = useState<'home' | 'plan'>('home');
   // The "Getting Trip Ready" popup shown while a recent or saved place is turned into a route.
@@ -337,7 +339,7 @@ export default function HomeScreen() {
     }
   }
 
-  // The Previous Trips tab sends a trip here to redo. It is read once, then cleared.
+  // The History tab sends a trip here to redo. It is read once, then cleared.
   const redoParams = useLocalSearchParams<{
     redo?: string; from?: string; to?: string; role?: string; resumeRequest?: string; resumeOffer?: string;
   }>();
@@ -369,7 +371,7 @@ export default function HomeScreen() {
   async function onPost() {
     Keyboard.dismiss();
     if (pricePerKm === null) {
-      setMddOpen(true);
+      setEditing('price');
       return;
     }
     passenger.clear();
@@ -714,7 +716,8 @@ export default function HomeScreen() {
                     durationMin={previewNow.durationMin}
                     maxDivergenceKm={driverMode ? mdd : undefined}
                     pricePerKm={driverMode ? pricePerKm : undefined}
-                    onMaxDivergence={driverMode ? () => setMddOpen(true) : undefined}
+                    onMaxDivergence={driverMode ? () => setEditing('mdd') : undefined}
+                    onPrice={driverMode ? () => setEditing('price') : undefined}
                     submitLabel={driverMode ? 'Schedule Ride' : 'Find driver'}
                     onSubmit={driverMode ? onPost : onFind}
                     loading={driverMode ? driver.loading : passenger.loading}
@@ -729,22 +732,26 @@ export default function HomeScreen() {
                     onRole={choose}
                     when={when}
                     onPickDate={() => pickDateTime(when ?? new Date(), setWhen)}
-                    driverOptions={driverMode ? { mdd, pricePerKm, onEdit: () => setMddOpen(true) } : undefined}
+                    driverOptions={driverMode ? {
+                      mdd,
+                      pricePerKm,
+                      onEditMdd: () => setEditing('mdd'),
+                      onEditPrice: () => setEditing('price'),
+                    } : undefined}
                     pickup={pickup}
                     onPickup={setPickup}
                     destination={destination}
                     onDestination={setDestination}
                     onFocusField={() => sheetRef.current?.snapToIndex(SNAP.FULL)}
                     onClear={clearFields}
-                    submitLabel='Preview route'
+                    submitLabel='Preview Route'
                     onSubmit={onPreview}
                     loading={quickLoading}
                     recent={places.recent}
                     saved={places.saved}
                     onUnsetSaved={onUnsetSaved}
+                    message={message}
                   />
-
-                  {!!message && <InlineNotice message={message} style={styles.message} />}
                 </>
               )}
             </BottomSheetScrollView>
@@ -823,15 +830,22 @@ export default function HomeScreen() {
       />
 
       <DivergenceModal
-        visible={mddOpen}
+        visible={editing === 'mdd'}
         value={mdd}
-        pricePerKm={pricePerKm}
-        onSave={(km, price) => {
+        onSave={(km) => {
           setMdd(km);
-          setPricePerKm(price);
-          setMddOpen(false);
+          setEditing(null);
         }}
-        onClose={() => setMddOpen(false)}
+        onClose={() => setEditing(null)}
+      />
+      <PriceModal
+        visible={editing === 'price'}
+        value={pricePerKm}
+        onSave={(price) => {
+          setPricePerKm(price);
+          setEditing(null);
+        }}
+        onClose={() => setEditing(null)}
       />
     </GestureHandlerRootView>
   );
@@ -855,7 +869,6 @@ const makeStyles = (c: Colors) =>
     // Room for the pill that overlaps the top of the sheet.
     homeContent: { paddingTop: 21 },
     pill: { position: 'absolute', top: 0, left: 16, right: 16 },
-    message: { marginTop: 12 },
     // Zero-height row at the sheet's top edge; the card hangs upward from it.
     notice: { position: 'absolute', top: 0, left: 16, right: 16, height: 0 },
     noticeCard: { position: 'absolute', left: 0, right: 0, bottom: 12 },

@@ -29,6 +29,7 @@ export const lightColors = {
   brand: '#1E90FF',
   onBrand: '#04101A',
   toggleActiveText: '#FFFFFF', // text on the toggle's blue side (light menus)
+  onPreview: '#FFFFFF',        // text on the "Preview route" button
   success: '#34D399',
   onSuccess: '#04140D',
   successTint: '#D8F3E8',  // soft green badge background
@@ -36,6 +37,7 @@ export const lightColors = {
   alert: '#FF6B6B',
   onAlert: '#1A0708',
   alertText: '#D63A3A',    // red text such as Log Out
+  alertTint: '#FBDADA',    // soft red badge background, such as a cancelled trip
   ring: '#FFFFFF',         // outline around map dots
   star: '#FFC857',
   pickup: '#8B6CD6',
@@ -84,6 +86,7 @@ export const darkColors: Colors = {
   brand: '#1E90FF',
   onBrand: '#04101A',
   toggleActiveText: '#04101A',
+  onPreview: '#04101A',
   success: '#34D399',
   onSuccess: '#04140D',
   successTint: '#10261D',
@@ -91,6 +94,7 @@ export const darkColors: Colors = {
   alert: '#FF6B6B',
   onAlert: '#1A0708',
   alertText: '#FF6B6B',
+  alertTint: '#2B1618',
   ring: '#F1F5F3',
   star: '#FFC857',
   pickup: '#8B6CD6',

@@ -34,10 +34,12 @@ type Props = {
   onPickTime: () => void;
   distanceKm: number;
   durationMin: number;
-  // Drivers only: how far they will go off their route. Tapping it opens the slider.
+  // Drivers only: how far they will go off their route, and their price. Each is changed in its
+  // own popup.
   maxDivergenceKm?: number;
   pricePerKm?: number | null;
   onMaxDivergence?: () => void;
+  onPrice?: () => void;
   submitLabel: string;
   onSubmit: () => void;
   loading: boolean;
@@ -98,15 +100,27 @@ export default function RoutePreview(p: Props) {
       </View>
 
       {p.onMaxDivergence && (
-        <PressButton ghost style={styles.driverOptions} onPress={p.onMaxDivergence}>
-          <View style={styles.driverDetails}>
-            <Text style={styles.labelEdit}>{p.maxDivergenceKm} km max divergence</Text>
-            <Text style={styles.label}>
-              {p.pricePerKm == null ? 'Set price per km' : `${p.pricePerKm.toFixed(2)} per km`}
+        <View style={styles.stats}>
+          <PressButton ghost style={styles.stat} onPress={p.onMaxDivergence}>
+            <Text style={styles.value}>{p.maxDivergenceKm} km</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.labelEdit}>Max divergence</Text>
+              <Text style={styles.dot}>·</Text>
+              <Text style={styles.edit}>Edit</Text>
+            </View>
+          </PressButton>
+          <View style={styles.sep} />
+          <PressButton ghost style={styles.stat} onPress={p.onPrice}>
+            <Text style={styles.value}>
+              {p.pricePerKm == null ? 'Set price' : `$${p.pricePerKm.toFixed(2)}`}
             </Text>
-          </View>
-          <Text style={styles.edit}>Edit</Text>
-        </PressButton>
+            <View style={styles.labelRow}>
+              <Text style={styles.labelEdit}>Price per km</Text>
+              <Text style={styles.dot}>·</Text>
+              <Text style={styles.edit}>Edit</Text>
+            </View>
+          </PressButton>
+        </View>
       )}
 
       {!!p.message && <InlineNotice message={p.message} style={styles.message} />}
@@ -157,20 +171,6 @@ const makeStyles = (c: Colors) =>
       marginTop: 12,
     },
     stat: { flex: 1, minWidth: 0, alignItems: 'center', gap: 2, paddingHorizontal: 8, paddingVertical: 4 },
-    driverOptions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 12,
-      marginTop: 10,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.card,
-    },
-    driverDetails: { flex: 1, minWidth: 0, gap: 3 },
     sep: { width: 1, height: 28, backgroundColor: c.border },
     value: { fontFamily: fonts.titleSemibold, fontSize: 17, color: c.text, textAlign: 'center' },
     label: { fontFamily: fonts.regular, fontSize: 12, color: c.textSecondary },
