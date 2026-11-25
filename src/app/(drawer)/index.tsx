@@ -28,7 +28,7 @@ import { homeMapContent } from '@/lib/homeMap';
 import { useNotify } from '@/lib/notify';
 import { pickDate, pickDateTime, pickTime } from '@/lib/pickDateTime';
 import { errText } from '@/lib/places';
-import { cancelPostedRide, loadPostedRides, type Req } from '@/lib/rides';
+import { cancelPostedRide, type Req } from '@/lib/rides';
 import { useTheme } from '@/lib/theme';
 import { type Colors } from '@/styles/theme';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
@@ -69,10 +69,9 @@ export default function HomeScreen() {
   // 'home' shows recent / saved trips; 'plan' shows the search form and results.
   const [view, setView] = useState<'home' | 'plan'>('home');
 
-  // Driver side: the cancel confirmation and the booked passenger.
+  // Driver side: the cancel confirmation.
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [booked, setBooked] = useState<{ rideId: string; name: string | null } | null>(null);
 
   // Notifications (errors and confirmations) are shown by the app-wide banner.
   const notify = useNotify();
@@ -135,25 +134,6 @@ export default function HomeScreen() {
   useEffect(() => {
     if (tripId) sheetRef.current?.snapToIndex(SNAP.TRIP);
   }, [tripId]);
-
-  // Ask the database whether a passenger is booked on this trip.
-  function refreshBooked() {
-    if (!userId || !tripId) return;
-    loadPostedRides(userId)
-      .then((rows) => {
-        const row = rows.find((r) => r.rideId === tripId);
-        setBooked(row?.passenger ? { rideId: tripId, name: row.passenger.name } : null);
-      })
-      .catch((e) => console.error(e));
-  }
-
-  // Check when a trip appears (for example after an app restart with a passenger already booked).
-  useEffect(() => {
-    refreshBooked();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripId, userId]);
-
-  const bookedNow = booked && booked.rideId === tripId ? booked : null;
 
   // Rider: look for drivers on the previewed route. The list takes over the screen when found.
   async function onFind() {
@@ -350,10 +330,9 @@ export default function HomeScreen() {
   }, [automatic, backFromDrivers, backFromPreview, backToPreview, clearAll, drawerStatus, leaveAutomaticSearch,
     showMatch, showPlan, showPreview, showResults, showTrip]));
 
-  // Driver answered a request. After accepting, look up who is booked.
+  // Driver answered a request.
   async function answer(accept: boolean, req: Req | null = driver.popup) {
-    if (!req) return;
-    if (await driver.respond(req, accept) && accept) refreshBooked();
+    if (req) await driver.respond(req, accept);
   }
 
   // "Yes" on the cancel confirmation: remove the trip from rider search.
@@ -424,7 +403,11 @@ export default function HomeScreen() {
             <View pointerEvents='none' style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }]} />
           )}
           {!showPreview && (!showPlan || showTrip) && <MenuButton onPress={() => navigation.openDrawer()} />}
-          {showTrip && <MapTitleChip title={inProgress ? 'Trip in progress' : tripTitle(driver.popup, bookedNow)} />}
+          {showTrip && (
+            <MapTitleChip
+              title={inProgress ? 'Trip in progress' : tripTitle(driver.popup, driver.passengers.length)}
+            />
+          )}
           {showPreview && <MapTitleChip title='Your route' />}
 
           <BottomSheet
@@ -463,7 +446,6 @@ export default function HomeScreen() {
                 <DriverTripPanel
                   driver={driver}
                   trip={driver.trip}
-                  booked={bookedNow}
                   message={message}
                   cancelling={cancelling}
                   onAnswer={(accept, request) => void answer(accept, request)}
@@ -585,7 +567,7 @@ export default function HomeScreen() {
         visible={confirmCancel}
         title='Are you sure?'
         message={
-          bookedNow
+          driver.passengers.length
             ? 'Accepted passengers will return to searching. This ride will move to History.'
             : 'This ride will move to History and any pending offers will close.'
         }

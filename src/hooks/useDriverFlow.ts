@@ -192,6 +192,10 @@ export function useDriverFlow(userId: string | undefined, active = true) {
   }
 
   const requests = currentRide?.requests ?? [];
+  // Everyone accepted on the trip, from the same fresh check as the requests, so a passenger who
+  // cancels drops off the list.
+  const passengers = requests.filter((r) => r.status === 'accepted')
+    .map((r) => ({ id: r.id, name: r.passengerName }));
   const visible = trip?.status === 'scheduled'
     ? requests.filter((r) => r.status !== 'accepted' && estimates.visibleIds.has(r.id)) : [];
   // The request shown in the popup: a tapped dot first, else the first waiting request.
@@ -214,7 +218,7 @@ export function useDriverFlow(userId: string | undefined, active = true) {
   }));
 
   return {
-    loading, msg, trip, requests, popup, markers, responding, acceptError,
+    loading, msg, trip, requests, passengers, popup, markers, responding, acceptError,
     planError: currentRide?.planError,
     popupEstimate: popup ? estimates.getEstimate(popup) : undefined,
     retryChecks: estimates.retryChecks,

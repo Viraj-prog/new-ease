@@ -203,7 +203,7 @@ export default function RidesScreen() {
                         onCancel={r.status === 'scheduled' ? () =>
                           confirmCancel(
                             'Cancel this ride?',
-                            r.passenger
+                            r.passengers.length
                               ? 'Accepted passengers will return to searching. This ride will move to History.'
                               : 'This ride will move to History and any pending offers will close.',
                             () => cancelPosted(r.rideId),

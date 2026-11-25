@@ -8,7 +8,6 @@ import type { Req, Trip } from '@/lib/rides';
 type Props = {
   driver: ReturnType<typeof useDriverFlow>;
   trip: Trip;
-  booked: { name: string | null } | null;
   message: string;
   cancelling: boolean;
   // Accept or decline a request: the one in the popup unless another is given.
@@ -43,7 +42,7 @@ export default function DriverTripPanel(p: Props) {
         endText={trip.endText}
         mddKm={trip.mdd}
         request={driver.popup}
-        booked={p.booked}
+        passengers={driver.passengers}
         message={p.message}
         responding={driver.responding}
         estimate={driver.popupEstimate}

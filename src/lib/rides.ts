@@ -753,8 +753,8 @@ export type PostedRide = {
   end: string;
   departAt: string | null;
   status: RideStatus;
-  // The accepted passenger, if any.
-  passenger: { name: string } | null;
+  // Everyone accepted on it.
+  passengers: { name: string }[];
 };
 
 // A ride the passenger has asked for (waiting) or booked (accepted).
@@ -792,19 +792,21 @@ export async function loadPostedRides(driverId: string, includeHistory = false):
     ? await supabase.from('users').select('userId, firstName, lastName').in('userId', ids)
     : { data: [] };
 
-  return rides.map((r) => {
-    const a = bookings.find((x) => x.rideId === r.rideId);
-    const p = a && people?.find((u) => u.userId === a.ride_requests.passengerId);
-    const name = p ? `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() : '';
-    return {
-      rideId: r.rideId,
-      start: r.driverStartLocation,
-      end: r.driverEndLocation,
-      departAt: r.departAt,
-      status: r.status,
-      passenger: a ? { name: name || 'Passenger' } : null,
-    };
-  });
+  const nameOf = (passengerId: string) => {
+    const p = people?.find((u) => u.userId === passengerId);
+    return (p ? `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() : '') || 'Passenger';
+  };
+
+  return rides.map((r) => ({
+    rideId: r.rideId,
+    start: r.driverStartLocation,
+    end: r.driverEndLocation,
+    departAt: r.departAt,
+    status: r.status,
+    passengers: bookings
+      .filter((x) => x.rideId === r.rideId)
+      .map((x) => ({ name: nameOf(x.ride_requests.passengerId) })),
+  }));
 }
 
 export async function loadBookedRides(passengerId: string): Promise<BookedRide[]> {

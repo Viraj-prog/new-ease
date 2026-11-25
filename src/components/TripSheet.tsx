@@ -16,8 +16,8 @@ type Props = {
   mddKm: number;
   // A passenger asking for this trip, if one is waiting for an answer.
   request: Req | null;
-  // The passenger who has been accepted, if any.
-  booked: { name: string | null } | null;
+  // Everyone who has been accepted.
+  passengers: { id: string; name: string | null }[];
   // Notices such as "Trip posted: 6.2 km" or an error from answering a request.
   message: string;
   responding?: boolean;
@@ -34,10 +34,10 @@ type Props = {
 };
 
 // Which title the map chip above the sheet should show for the current state.
-export function tripTitle(request: Req | null, booked: { name: string | null } | null) {
+export function tripTitle(request: Req | null, passengerCount: number) {
   if (request) return 'Ride request';
-  if (booked) return 'Passenger booked';
-  return 'Trip posted';
+  if (passengerCount > 1) return `${passengerCount} passengers booked`;
+  return passengerCount ? 'Passenger booked' : 'Trip posted';
 }
 
 const initialsOf = (name: string | null) =>
@@ -54,7 +54,7 @@ export default function TripSheet(p: Props) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
 
-  const name = p.request?.passengerName ?? p.booked?.name ?? null;
+  const name = p.request?.passengerName ?? null;
   const avatar = colors.avatars[0];
 
   const stops = <StopsList start={p.startText} end={p.endText} />;
@@ -151,19 +151,24 @@ export default function TripSheet(p: Props) {
     );
   }
 
-  // A passenger is booked on this trip.
-  if (p.booked) {
+  // Passengers are booked on this trip.
+  if (p.passengers.length) {
     return (
       <View>
-        <View style={styles.personCard}>
-          <View style={[styles.avatar, { backgroundColor: avatar.bg }]}>
-            <Text style={[styles.avatarText, { color: avatar.fg }]}>{initialsOf(name)}</Text>
-          </View>
-          <View style={styles.personText}>
-            <Text style={styles.personName}>{name ?? 'Your passenger'}</Text>
-            <Text style={styles.personSub}>booked on your trip</Text>
-          </View>
-        </View>
+        {p.passengers.map((passenger, index) => {
+          const colour = colors.avatars[index % colors.avatars.length];
+          return (
+            <View key={passenger.id} style={styles.personCard}>
+              <View style={[styles.avatar, { backgroundColor: colour.bg }]}>
+                <Text style={[styles.avatarText, { color: colour.fg }]}>{initialsOf(passenger.name)}</Text>
+              </View>
+              <View style={styles.personText}>
+                <Text style={styles.personName}>{passenger.name ?? 'Your passenger'}</Text>
+                <Text style={styles.personSub}>booked on your trip</Text>
+              </View>
+            </View>
+          );
+        })}
         {stops}
         <View style={styles.note}>
           <Icon name='check-circle' size={22} color={colors.onTint} />
