@@ -140,10 +140,12 @@ export default function HomeScreen() {
     if (tripId && view === 'home') setView('trip');
   }
 
-  // The ride gets the taller sheet.
+  // The ride gets the taller sheet. A ride found as the app opens can arrive before the sheet has
+  // been laid out, which ignores the call, so it is repeated once the sheet is on screen.
+  const [sheetShown, setSheetShown] = useState(false);
   useEffect(() => {
     if (tripId && view === 'trip') sheetRef.current?.snapToIndex(SNAP.TRIP);
-  }, [tripId, view]);
+  }, [tripId, view, sheetShown]);
 
   // Rider: look for drivers on the previewed route. The list takes over the screen when found.
   async function onFind() {
@@ -463,6 +465,7 @@ export default function HomeScreen() {
           <BottomSheet
             ref={sheetRef}
             index={1}
+            onChange={() => setSheetShown(true)}
             snapPoints={snapPoints}
             animatedPosition={sheetPosition}
             enableDynamicSizing={false}
