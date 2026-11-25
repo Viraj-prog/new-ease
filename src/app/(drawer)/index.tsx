@@ -86,15 +86,10 @@ export default function HomeScreen() {
     });
   }
 
-  // The driver said yes: go Home and say so.
-  function onBooked(name: string) {
+  // The driver said yes: go Home. The trip updates check announces it.
+  function onBooked() {
     results.setListOpen(false);
     closePlan();
-    notify({
-      kind: 'success',
-      title: 'Trip Successfully Booked!',
-      subtitle: name ? `${name} will pick you up soon` : 'Your driver will pick you up soon',
-    });
   }
 
   const passenger = usePassengerFlow(userId, onBooked);

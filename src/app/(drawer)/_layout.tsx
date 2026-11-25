@@ -1,7 +1,7 @@
 import Icon from '@/components/Icon';
 import LogoutPopup from '@/components/LogoutPopup';
 import { useProfile } from '@/hooks/useProfile';
-import { useDriverCancellationNotice } from '@/hooks/useDriverCancellationNotice';
+import { useTripUpdates } from '@/hooks/useTripUpdates';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
@@ -9,7 +9,6 @@ import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Drawer, type DrawerContentComponentProps } from 'expo-router/drawer';
-import { usePathname } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -108,9 +107,8 @@ function DrawerContent(props: DrawerContentComponentProps) {
 
 export default function DrawerLayout() {
   const { colors } = useTheme();
-  const { session, driverMode } = useAuth();
-  const pathname = usePathname();
-  useDriverCancellationNotice(pathname === '/' && !driverMode ? undefined : session?.user.id);
+  const { session } = useAuth();
+  useTripUpdates(session?.user.id);
 
   return (
     <Drawer

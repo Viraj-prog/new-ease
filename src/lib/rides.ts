@@ -711,16 +711,6 @@ export async function loadRequestOffers(requestId: string) {
   };
 }
 
-export async function loadDriverCancelledOfferIds(passengerId: string): Promise<string[]> {
-  const { data, error } = await supabase.from('ride_offers')
-    .select('id, ride_requests!inner(passengerId)')
-    .eq('ride_requests.passengerId', passengerId)
-    .eq('status', 'cancelled')
-    .eq('cancelledByDriver', true);
-  if (error) throw error;
-  return (data ?? []).map((offer) => offer.id);
-}
-
 export async function loadReopenedPassengerRequests(passengerId: string) {
   const { data, error } = await supabase.from('ride_offers')
     .select('id, requestId, ride_requests!inner(passengerId, status)')
