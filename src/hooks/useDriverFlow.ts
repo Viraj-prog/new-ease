@@ -137,7 +137,14 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     const revision = ++loadRevision.current;
     try {
       const latest = saved ?? await loadDriverTrip(rideId, userId);
-      if (!latest) return;
+      if (!latest) {
+        // It was finished or cancelled somewhere else.
+        if (loadRevision.current === revision) {
+          setTrip((shown) => shown?.rideId === rideId ? null : shown);
+          setRideState(null);
+        }
+        return;
+      }
       const state = await loadDriverRideState(latest, userId);
       if (loadRevision.current !== revision) return;
       setRideState(state);

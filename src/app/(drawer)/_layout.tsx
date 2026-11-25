@@ -1,5 +1,6 @@
 import Icon from '@/components/Icon';
 import LogoutPopup from '@/components/LogoutPopup';
+import OverdueTripPrompt from '@/components/OverdueTripPrompt';
 import { useProfile } from '@/hooks/useProfile';
 import { useTripUpdates } from '@/hooks/useTripUpdates';
 import { useAuth } from '@/lib/auth';
@@ -111,16 +112,19 @@ export default function DrawerLayout() {
   useTripUpdates(session?.user.id);
 
   return (
-    <Drawer
-      drawerContent={(props) => <DrawerContent {...props} />}
-      screenOptions={{
-        headerShown: false,
-        drawerType: 'front',
-        overlayColor: colors.scrim,
-        // The rounded panel is drawn by DrawerContent, so the container itself is see-through.
-        drawerStyle: { backgroundColor: 'transparent', width: 300 },
-      }}
-    />
+    <>
+      <Drawer
+        drawerContent={(props) => <DrawerContent {...props} />}
+        screenOptions={{
+          headerShown: false,
+          drawerType: 'front',
+          overlayColor: colors.scrim,
+          // The rounded panel is drawn by DrawerContent, so the container itself is see-through.
+          drawerStyle: { backgroundColor: 'transparent', width: 300 },
+        }}
+      />
+      <OverdueTripPrompt userId={session?.user.id} />
+    </>
   );
 }
 

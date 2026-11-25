@@ -748,6 +748,45 @@ export async function sendRequest(requestId: string, rideId: string) {
   if (error) throw error;
 }
 
+export type OverdueRide = {
+  rideId: string;
+  status: RideStatus;
+  destination: string;
+  departAt: string;
+};
+
+// Driver: their oldest open ride that is long past its time. One never started is overdue some
+// hours after it was due to leave; one under way, some hours after it should have arrived.
+export async function loadOverdueRide(driverId: string, skip: ReadonlySet<string>): Promise<OverdueRide | null> {
+  if (!isUuid(driverId)) return null;
+  const { data, error } = await supabase
+    .from('rides')
+    .select('rideId, status, driverEndLocation, departAt, route, plan')
+    .eq('driverId', driverId)
+    .in('status', activeRideStatuses)
+    .lt('departAt', new Date(Date.now() - OVERDUE_MS).toISOString())
+    .order('departAt', { ascending: true });
+  if (error) throw error;
+
+  type Row = {
+    rideId: string;
+    status: RideStatus;
+    driverEndLocation: string;
+    departAt: string;
+    route: { durationMin?: number } | null;
+    plan: { durationMin?: number } | null;
+  };
+  const found = ((data ?? []) as unknown as Row[]).find((r) => {
+    if (skip.has(r.rideId)) return false;
+    if (r.status !== 'in_progress') return true;
+    const minutes = Math.max(r.route?.durationMin ?? 0, r.plan?.durationMin ?? 0);
+    return Date.parse(r.departAt) + minutes * 60000 + OVERDUE_MS < Date.now();
+  });
+  return found
+    ? { rideId: found.rideId, status: found.status, destination: found.driverEndLocation, departAt: found.departAt }
+    : null;
+}
+
 // ---- Rides tab ----
 
 // A trip the driver posted.
