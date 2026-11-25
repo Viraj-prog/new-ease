@@ -1,3 +1,4 @@
+import { isExpired } from '@/lib/expiry';
 import type { Pt } from '@/lib/geo';
 import { supabase } from '@/lib/supabase';
 
@@ -47,6 +48,7 @@ type RequestRow = {
   price?: number | string | null;
   directKm?: number | null;
   dropoffText?: string | null;
+  departAt?: string | null;
 };
 
 function priceOf(r: RequestRow, pricePerKm: number | null): { price: number | null; estimated: boolean } {
@@ -120,7 +122,7 @@ async function loadAsRider(userId: string, history: boolean): Promise<PreviousTr
       ? r.cancelledByDriver ? 'Cancelled by driver' : isFinished(r) ? 'Completed' : 'Cancelled'
       : undefined,
     reopenedRequestId: history && r.cancelledByDriver && r.ride_requests.status === 'open'
-      ? r.ride_requests.id : undefined,
+      && !isExpired(r.ride_requests.departAt) ? r.ride_requests.id : undefined,
     reopenedOfferId: r.cancelledByDriver ? r.id : undefined,
     ...priceOf({
       ...r.ride_requests,

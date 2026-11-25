@@ -169,7 +169,12 @@ export default function HomeScreen() {
     const known = preview ? { ...preview, from: preview.start, to: preview.end } : undefined;
     const found = await passenger.search(pickup, destination, when ?? new Date(), known);
     if (found === 'none') {
-      notify({ kind: 'alert', title: "No Driver's available.", subtitle: 'Try again Later.' });
+      // The search stays open, so a driver who posts a matching ride can still pick the rider up.
+      notify({
+        kind: 'alert',
+        title: "No Driver's available.",
+        subtitle: 'Drivers can still pick you up. Cancel in Scheduled Trips.',
+      });
     }
   }
 
@@ -273,11 +278,13 @@ export default function HomeScreen() {
 
   // Back from the driver list returns to the route preview.
   const { setChosenId, setListOpen, finishAutomatic, reopened, hasResults } = results;
+  const abandonSearch = passenger.abandon;
   const backToPreview = useCallback(() => {
+    abandonSearch();
     clearPassenger();
     setChosenId(null);
     setListOpen(false);
-  }, [clearPassenger, setChosenId, setListOpen]);
+  }, [abandonSearch, clearPassenger, setChosenId, setListOpen]);
 
   function openPlan(place?: string) {
     if (place) setDestination(place);
@@ -295,6 +302,13 @@ export default function HomeScreen() {
     clearAll();
     setView('home');
   }, [clearAll, finishAutomatic]);
+
+  // "Cancel" on the match for a reopened search closes the search itself.
+  async function cancelReopenedSearch() {
+    if (!(await passenger.cancelSearch())) return;
+    leaveAutomaticSearch();
+    notify({ kind: 'success', title: 'Search cancelled' });
+  }
 
   const recoveryNotice = automatic?.showNotice ? (
     <InlineNotice message='Your driver cancelled, we’re searching again' onDismiss={results.dismissNotice} />
@@ -532,7 +546,9 @@ export default function HomeScreen() {
               avatarIndex={avatarSlot(Math.max(0, passenger.results.indexOf(best)))}
               hasOthers={passenger.results.length > 1}
               onSeeOthers={() => setListOpen(true)}
-              onCancel={automatic ? leaveAutomaticSearch : backToPreview}
+              onCancel={!automatic ? backToPreview
+                : passenger.offerStatuses[best.rideId] ? leaveAutomaticSearch
+                : () => void cancelReopenedSearch()}
               onConfirm={results.confirmBest}
             />
           )}

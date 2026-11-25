@@ -2,6 +2,8 @@ import type { Pt } from '@/lib/geo';
 import { useNotify } from '@/lib/notify';
 import { errText, resolveDestination, resolveStart } from '@/lib/places';
 import {
+  cancelBooking,
+  cancelOtherSearches,
   loadRequestOffers,
   loadOpenPassengerRequest,
   saveRequest,
@@ -110,7 +112,7 @@ export function usePassengerFlow(userId: string | undefined, onAccepted?: (drive
         loadRequestOffers(id),
       ]);
       if (snapshot.acceptedRideId) {
-        setMsg('Another driver already accepted this request. Check Trips for your booking.');
+        setMsg('Another driver already accepted this request. Check Scheduled Trips for your booking.');
         return 'error';
       }
       lastSentRequest.current = id;
@@ -171,6 +173,18 @@ export function usePassengerFlow(userId: string | undefined, onAccepted?: (drive
       });
       if (nextRequestId !== requestId) setOfferStatuses({});
       setRequestId(nextRequestId);
+      try {
+        if (await cancelOtherSearches(userId, nextRequestId, when)) {
+          notify({
+            kind: 'alert',
+            title: 'Earlier search replaced',
+            subtitle: 'Requests from your other search that day were withdrawn.',
+          });
+        }
+      } catch (e) {
+        // The new search still works; the old one stays listed under Scheduled Trips.
+        console.warn('Could not close an earlier search', e);
+      }
 
       const list = await searchRides(from, to, when, userId, direct.distanceKm);
       driverNames.current = new Map(list.map((ride) => [ride.rideId, ride.driverName]));
@@ -182,6 +196,32 @@ export function usePassengerFlow(userId: string | undefined, onAccepted?: (drive
       return 'error';
     } finally {
       setLoading(false);
+    }
+  }
+
+  // The rider backed out without asking any driver, so the search is closed and nobody can book
+  // them on it. A search that was sent to a driver, accepted or reopened is left alone.
+  const abandon = useCallback(() => {
+    const id = requestId;
+    if (!id || sending.current || lastSentRequest.current === id || notifiedRequest.current === id) return;
+    setRequestId(null);
+    // Check the database first: a driver may have accepted the rider a moment ago.
+    loadRequestOffers(id)
+      .then(({ acceptedRideId, offers }) => (acceptedRideId || offers.length ? undefined : cancelBooking(id)))
+      .catch((e) => console.warn('Could not close the search', e));
+  }, [requestId]);
+
+  // Close the search for good: the rider pressed Cancel on it.
+  async function cancelSearch(): Promise<boolean> {
+    if (!requestId || sending.current) return false;
+    try {
+      await cancelBooking(requestId);
+      setRequestId(null);
+      return true;
+    } catch (e) {
+      console.error(e);
+      notify({ kind: 'alert', title: 'Could not cancel', subtitle: errText(e) });
+      return false;
     }
   }
 
@@ -213,6 +253,6 @@ export function usePassengerFlow(userId: string | undefined, onAccepted?: (drive
 
   return {
     loading, msg, results, pickup, dropoff, offerStatuses, sendingRideId,
-    search, resume, request, clear,
+    search, resume, request, clear, abandon, cancelSearch,
   };
 }

@@ -1,3 +1,4 @@
+import { isExpired, laterOf, searchCutoff } from './expiry';
 import { classifyTrip, dayRange, localDate, type Pt } from './geo';
 import { buildGoogleMapsLegs } from './googleMapsRoute';
 import { getDrivingTimeMatrix, queuePlanningOsrmRequest } from './osrmTable';
@@ -222,7 +223,7 @@ async function loadRequests(trip: Trip, driverId: string) {
   const [searching, offers] = await Promise.all([
     trip.status === 'scheduled'
       ? supabase.from('ride_requests').select(fields).eq('status', 'open').neq('passengerId', driverId)
-        .gte('departAt', from).lte('departAt', to)
+        .gte('departAt', laterOf(from, searchCutoff())).lte('departAt', to)
       : Promise.resolve({ data: null, error: null }),
     supabase.from('ride_offers').select(`status, fare, ride_requests!inner(${fields})`)
       .eq('rideId', trip.rideId),
@@ -237,7 +238,7 @@ async function loadRequests(trip: Trip, driverId: string) {
   const candidates = [
     ...linked.filter(({ status, ride_requests }) =>
       status === 'accepted' || (trip.status === 'scheduled' && status === 'pending'
-        && ['open', 'pending'].includes(ride_requests.status)),
+        && ['open', 'pending'].includes(ride_requests.status) && !isExpired(ride_requests.departAt)),
     ).map((offer) => ({ row: offer.ride_requests, status: offer.status, fare: offer.fare })),
     ...(searching.data ?? []).filter((row) => !offeredIds.has(row.id))
       .map((row) => ({ row, status: 'open', fare: null })),
@@ -628,7 +629,8 @@ export async function searchRides(
        drivers ( driverRating, mdd, users ( firstName, lastName ) )`,
     )
     .neq('driverId', userId)
-    .gte('departAt', a)
+    // Rides that left a while ago are no longer offered.
+    .gte('departAt', laterOf(a, searchCutoff()))
     .lte('departAt', b)
     .eq('status', 'scheduled');
   if (error) throw error;
@@ -724,6 +726,7 @@ export async function loadReopenedPassengerRequests(passengerId: string) {
     .select('id, requestId, ride_requests!inner(passengerId, status)')
     .eq('ride_requests.passengerId', passengerId)
     .eq('ride_requests.status', 'open')
+    .gte('ride_requests.departAt', searchCutoff())
     .eq('cancelledByDriver', true)
     .eq('status', 'cancelled')
     .order('createdAt', { ascending: false })
@@ -740,6 +743,7 @@ export async function loadOpenPassengerRequest(requestId: string, passengerId: s
     .eq('passengerId', passengerId)
     .eq('status', 'open')
     .is('acceptedRideId', null)
+    .gte('departAt', searchCutoff())
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -871,6 +875,7 @@ export async function loadOpenSearches(passengerId: string): Promise<OpenSearch[
     .eq('passengerId', passengerId)
     .eq('status', 'open')
     .is('acceptedRideId', null)
+    .gte('departAt', searchCutoff())
     .order('departAt', { ascending: true });
   if (error) throw error;
 
@@ -884,6 +889,26 @@ export async function loadOpenSearches(passengerId: string): Promise<OpenSearch[
     // A search with a request still waiting is already listed under that driver.
     .filter((r) => !r.ride_offers?.some((offer) => offer.status === 'pending'))
     .map((r) => ({ requestId: r.id, destination: r.dropoffText?.trim() || null, departAt: r.departAt }));
+}
+
+// One open search per rider per day: close the others for that day. Returns how many of them had
+// a request waiting on a driver.
+export async function cancelOtherSearches(passengerId: string, keepId: string, when: Date): Promise<number> {
+  const { from, to } = dayRange(when);
+  const { data, error } = await supabase
+    .from('ride_requests')
+    .select('id, ride_offers(status)')
+    .eq('passengerId', passengerId)
+    .eq('status', 'open')
+    .is('acceptedRideId', null)
+    .neq('id', keepId)
+    .gte('departAt', from)
+    .lte('departAt', to);
+  if (error) throw error;
+
+  const others = (data ?? []) as unknown as { id: string; ride_offers: { status: OfferStatus }[] | null }[];
+  for (const other of others) await cancelBooking(other.id);
+  return others.filter((other) => other.ride_offers?.some((offer) => offer.status === 'pending')).length;
 }
 
 // Passenger: cancel a booking (frees the ride again if it had been accepted).

@@ -7,6 +7,7 @@ import TripHistory from '@/components/TripHistory';
 import TripLifecycleActions from '@/components/TripLifecycleActions';
 import { useMyRides } from '@/hooks/useMyRides';
 import { useAuth } from '@/lib/auth';
+import { isExpired } from '@/lib/expiry';
 import type { PreviousTrip } from '@/lib/previousTrips';
 import { isActiveRide, type BookedRide, type RideStatus } from '@/lib/rides';
 import { useTheme } from '@/lib/theme';
@@ -42,7 +43,7 @@ const statusLabels: Record<RideStatus, string> = {
 
 function isCurrentBooking(ride: BookedRide) {
   return ride.status === 'accepted' && isActiveRide(ride.rideStatus)
-    || ride.status === 'pending' && ride.rideStatus === 'scheduled';
+    || ride.status === 'pending' && ride.rideStatus === 'scheduled' && !isExpired(ride.departAt);
 }
 
 function bookingLabel(ride: BookedRide) {
