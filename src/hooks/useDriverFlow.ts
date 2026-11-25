@@ -259,6 +259,8 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     retryChecks: estimates.retryChecks,
     retryPlan: tripId ? () => void refreshRequests(tripId) : undefined,
     stops, marking, mark,
+    // Undefined until the trip under way has been read, so the saved plan is drawn meanwhile.
+    liveStops: trip?.status === 'in_progress' && currentRide ? stops.map((s) => s.stop) : undefined,
     post, respond, clear, clearMessage, sync, closePopup, markStarted,
   };
 }

@@ -424,7 +424,7 @@ export default function HomeScreen() {
       <InteractiveMap
         route={map.route}
         markers={map.markers}
-        plannedStops={map.plannedStops}
+        plannedStops={(showTrip ? driver.liveStops : undefined) ?? map.plannedStops}
         // Fit the route into the map area left visible above the sheet.
         padding={{
           top: insets.top + 90,

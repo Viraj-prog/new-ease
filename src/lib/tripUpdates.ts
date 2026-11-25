@@ -24,8 +24,9 @@ export type TripEvent = {
   kind: 'alert' | 'success';
   title: string;
   subtitle: string;
-  // Whose name replaces "{name}" in the text.
+  // Whose name replaces "{name}" in the text, and what to call them if it cannot be read.
   otherId: string;
+  otherAs: 'your driver' | 'a passenger';
   // Lower shows first when several things happened at once.
   order: number;
 };
@@ -80,8 +81,8 @@ export async function loadSnapshot(userId: string): Promise<Snapshot> {
 
 // What the driver did to one of the user's requests.
 function riderEvent(was: OfferState | undefined, now: OfferState): TripEvent | null {
-  const event = (kind: TripEvent['kind'], title: string, subtitle: string, order: number) =>
-    ({ kind, title, subtitle, order, otherId: now.otherId });
+  const event = (kind: TripEvent['kind'], title: string, subtitle: string, order: number): TripEvent =>
+    ({ kind, title, subtitle, order, otherId: now.otherId, otherAs: 'your driver' });
 
   if (now.noShow && !was?.noShow) {
     return event('alert', 'Marked as a no show', `Your booking for the trip to ${now.destination} was cancelled.`, 0);
@@ -115,8 +116,8 @@ function riderEvent(was: OfferState | undefined, now: OfferState): TripEvent | n
 
 // What a rider did on one of the user's rides.
 function driverEvent(was: OfferState | undefined, now: OfferState): TripEvent | null {
-  const event = (kind: TripEvent['kind'], title: string, subtitle: string, order: number) =>
-    ({ kind, title, subtitle, order, otherId: now.otherId });
+  const event = (kind: TripEvent['kind'], title: string, subtitle: string, order: number): TripEvent =>
+    ({ kind, title, subtitle, order, otherId: now.otherId, otherAs: 'a passenger' });
   const live = now.ride === 'scheduled' || now.ride === 'in_progress';
   if (!live) return null;
 
@@ -155,7 +156,7 @@ export async function nameEvent(event: TripEvent): Promise<TripEvent> {
     .maybeSingle();
   const name = `${data?.firstName ?? ''} ${data?.lastName ?? ''}`.trim();
   const fill = (text: string) => {
-    const filled = text.replace('{name}', name || 'the other person');
+    const filled = text.replace('{name}', name || event.otherAs);
     return filled.charAt(0).toUpperCase() + filled.slice(1);
   };
   return { ...event, title: fill(event.title), subtitle: fill(event.subtitle) };
