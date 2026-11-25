@@ -79,7 +79,23 @@ Home; show driving and riding trips together in Pending; make Back leave the rid
 | 9 | Refuse expired requests and acceptances | migration `012` | **yes** | committed; `012` run |
 | 10 | Stop progress, stop buttons, Resume and arrival prompt | migration `013`, lifecycle and Maps files | **yes** | committed; `013` run |
 | 11 | End trip early; correct History for each rider | migration `014`, lifecycle and History files | **yes** | committed; `014` run |
-| 12 | Test every case with two accounts; then plan push notifications | none | later | |
+| 12 | Test every case with two accounts; then plan push notifications | none | later | partly tested |
+
+### Tested on 2026-11-25 (phone as rider, emulator as driver)
+
+Worked: searching skips a ride more than an hour old; the open search shows in Scheduled Trips and
+can be cancelled; a driver accepts a searching rider and a sent request; booking, new request, no
+show and ended-trip notices; Picked up; the arrival prompt after returning from Google Maps; No
+show; the finish warning; End trip early with the rider in the car and with the rider waiting.
+
+Still to test: **Dropped off**, finishing a trip with a passenger on it, ending early after a
+drop-off, the drop-off and destination arrival prompts, Resume's remaining stops inside Google
+Maps, two or more passengers, declines, cancellations before the start, and a refused expired
+request.
+
+Seen but not changed: tapping a rider's dot on the driver's map did not open the request on the
+emulator (View requests works); the emulator driver account shows as "Driver", probably because it
+has no name saved.
 
 Database steps (9 to 11): the script is written first, run by hand in the Supabase SQL editor, and
 app code that depends on it is added only after it is confirmed to have worked. Agree step 10
