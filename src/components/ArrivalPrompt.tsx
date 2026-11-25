@@ -1,11 +1,11 @@
 import PopupShell from '@/components/PopupShell';
 import PressButton from '@/components/PressButton';
 import { stopTitle } from '@/components/TripStops';
+import type { Pt } from '@/lib/geo';
 import { useNotify } from '@/lib/notify';
 import { errText } from '@/lib/places';
 import { haversineKm } from '@/lib/previousTrips';
 import { finishTrip, loadActiveTrip } from '@/lib/rides';
-import { getCurrentPoint } from '@/lib/routing';
 import { bookedStops, loadPassengerName, loadStopProgress, markStop, type StopMark } from '@/lib/stopProgress';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
@@ -16,6 +16,17 @@ import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-nativ
 
 // How close to a stop counts as being there.
 const ARRIVE_KM = 0.2;
+// A position this recent will do; after navigation there normally is one.
+const FRESH_MS = 2 * 60 * 1000;
+
+// This must never ask for permission: Android shows that request by pushing the app to the back,
+// which would look like the driver returning to it.
+async function whereAmI(): Promise<Pt | null> {
+  if (!(await Location.getForegroundPermissionsAsync()).granted) return null;
+  const position = await Location.getLastKnownPositionAsync({ maxAge: FRESH_MS })
+    ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+  return { lat: position.coords.latitude, lng: position.coords.longitude };
+}
 
 type Arrival =
   | { rideId: string; kind: 'pickup' | 'dropoff'; requestId: string; name: string }
@@ -25,9 +36,7 @@ type Arrival =
 async function findArrival(driverId: string): Promise<Arrival | null> {
   const trip = await loadActiveTrip(driverId);
   if (trip?.status !== 'in_progress') return null;
-  // Only look if location is already allowed; this check never asks for it.
-  if (!(await Location.getForegroundPermissionsAsync()).granted) return null;
-  const here = await getCurrentPoint();
+  const here = await whereAmI();
   if (!here) return null;
 
   const stops = bookedStops(trip.plan?.stops ?? [], await loadStopProgress(trip.rideId));

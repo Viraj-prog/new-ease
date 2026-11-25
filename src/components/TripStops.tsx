@@ -100,7 +100,7 @@ export function StopChecklist({ stops }: { stops: NamedStop[] }) {
           <View style={styles.marker}>
             {s.done
               ? <Icon name='check-circle' size={18} color={colors.textSecondary} />
-              : <View style={[styles.dot, { backgroundColor: s.stop.type === 'pickup' ? colors.pickup : colors.text }]} />}
+              : <View style={[styles.dot, { backgroundColor: s.stop.type === 'pickup' ? colors.brand : colors.alert }]} />}
           </View>
           <Text style={[styles.itemText, s.done && styles.done]}>{stopTitle(s.stop.type, s.name)}</Text>
         </View>
