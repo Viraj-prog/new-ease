@@ -92,6 +92,9 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     }
   }
 
+  // Drop the last notice, such as "Trip posted", while keeping the trip.
+  const clearMessage = useCallback(() => setMsg(''), []);
+
   // The latest shown trip, readable from the focus callback below.
   const tripRef = useRef<Trip | null>(null);
   useEffect(() => {
@@ -223,6 +226,6 @@ export function useDriverFlow(userId: string | undefined, active = true) {
     popupEstimate: popup ? estimates.getEstimate(popup) : undefined,
     retryChecks: estimates.retryChecks,
     retryPlan: tripId ? () => void refreshRequests(tripId) : undefined,
-    post, respond, clear, closePopup, markStarted,
+    post, respond, clear, clearMessage, sync, closePopup, markStarted,
   };
 }

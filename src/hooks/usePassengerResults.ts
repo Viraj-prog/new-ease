@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react';
 type Options = {
   userId: string | undefined;
   driverMode: boolean;
-  view: 'home' | 'plan';
+  view: 'home' | 'plan' | 'trip';
   passenger: ReturnType<typeof usePassengerFlow>;
   // A search the driver cancelled on has been reopened on Home.
   onReopened: () => void;

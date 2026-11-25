@@ -9,12 +9,14 @@ import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
-import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
-  // Left out while a trip is posted, so the form cannot be dismissed from under it.
+  // Left out when the form cannot be dismissed.
   onBack?: () => void;
+  // The driver's ride, as a card above the form.
+  activeTrip?: ReactNode;
   driverMode: boolean;
   switching: boolean;
   onRole: (driver: boolean) => void;
@@ -168,6 +170,8 @@ export default function PlanForm(p: Props) {
         </Pressable>
       </View>
 
+      {p.activeTrip && <View style={styles.activeTrip}>{p.activeTrip}</View>}
+
       {/* Start and end, as one card. */}
       <View style={[styles.card, styles.route]}>
         <View style={styles.markers}>
@@ -311,6 +315,7 @@ const makeStyles = (c: Colors) =>
     clearText: { fontFamily: fonts.semibold, fontSize: 14, color: c.onTint },
     clearTextOff: { color: c.textSecondary, opacity: 0.5 },
     roleToggle: { width: 224 },
+    activeTrip: { marginBottom: 16 },
 
     card: {
       borderRadius: RADIUS,

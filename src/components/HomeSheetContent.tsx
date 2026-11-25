@@ -4,10 +4,13 @@ import { RECENT_TRIPS_SHOWN, type RecentPlace, type SavedPlace } from '@/lib/sav
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
+import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import PressButton from '@/components/PressButton';
 
 type Props = {
+  // The driver's ride, as a card above the rest.
+  activeTrip?: ReactNode;
   recent: RecentPlace[];
   saved: SavedPlace[];
   // A recent trip was tapped: its place becomes the destination.
@@ -20,12 +23,15 @@ type Props = {
 
 // What the sheet shows when nothing is being planned: recent and saved trips.
 // (The search pill floats over the top edge of the sheet, so it is not part of this.)
-export default function HomeSheetContent({ recent, saved, onPickRecent, onPickSaved, onUnsetSaved }: Props) {
+export default function HomeSheetContent({
+  activeTrip, recent, saved, onPickRecent, onPickSaved, onUnsetSaved,
+}: Props) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
 
   return (
     <View>
+      {activeTrip && <View style={styles.activeTrip}>{activeTrip}</View>}
       <Text style={styles.heading}>Recent trips</Text>
       {recent.length === 0 && <Text style={styles.empty}>Trips you book or post will show up here.</Text>}
       {recent.slice(0, RECENT_TRIPS_SHOWN).map((r) => (
@@ -61,6 +67,7 @@ export default function HomeSheetContent({ recent, saved, onPickRecent, onPickSa
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
+    activeTrip: { marginTop: 6, marginBottom: 14 },
     heading: { fontFamily: fonts.semibold, fontSize: 16, color: c.text, marginBottom: 2 },
     headingGap: { marginTop: 13, marginBottom: 10 },
     empty: { fontFamily: fonts.regular, fontSize: 14, color: c.textSecondary, paddingVertical: 10 },

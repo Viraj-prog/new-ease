@@ -30,8 +30,12 @@ type Props = {
   title: string;
   // Where it starts, when that is known.
   from?: string | null;
+  // Who else is on it.
+  note?: string | null;
   when: string | null;
-  actions: PendingAction[];
+  actions?: PendingAction[];
+  // Makes the whole card one button, shown with an arrow: the small card on Home.
+  onPress?: () => void;
   // Extra controls under the buttons, such as Start trip.
   children?: ReactNode;
 };
@@ -46,8 +50,9 @@ export default function PendingCard(p: Props) {
   const tint = settled ? colors.successTint : colors.selected;
   const ink = settled ? colors.onSuccessTint : colors.onTint;
 
-  return (
-    <View style={styles.card}>
+  const actions = p.actions ?? [];
+  const body = (
+    <>
       <View style={styles.top}>
         <View style={[styles.bubble, { backgroundColor: tint }]}>
           <Ionicons name={status.icon} size={20} color={ink} />
@@ -66,13 +71,15 @@ export default function PendingCard(p: Props) {
           </View>
         </View>
         <Text style={[styles.status, { backgroundColor: tint, color: ink }]}>{status.label}</Text>
+        {p.onPress && <Ionicons name='chevron-forward' size={20} color={colors.textSecondary} />}
       </View>
 
       {!!p.from && <Text style={styles.from} numberOfLines={2}>From {p.from}</Text>}
+      {!!p.note && <Text style={styles.from} numberOfLines={2}>{p.note}</Text>}
 
-      {p.actions.length > 0 && (
+      {actions.length > 0 && (
         <View style={styles.actions}>
-          {p.actions.map((a) => (
+          {actions.map((a) => (
             <PressButton
               key={a.label}
               ripple={false}
@@ -94,7 +101,22 @@ export default function PendingCard(p: Props) {
         </View>
       )}
       {p.children}
-    </View>
+    </>
+  );
+
+  return p.onPress ? (
+    <PressButton
+      ripple={false}
+      pressScale={0.98}
+      style={styles.card}
+      onPress={p.onPress}
+      accessibilityRole='button'
+      accessibilityLabel={`${status.label} ride to ${p.title}${p.when ? `, ${p.when}` : ''}`}
+    >
+      {body}
+    </PressButton>
+  ) : (
+    <View style={styles.card}>{body}</View>
   );
 }
 

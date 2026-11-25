@@ -10,6 +10,7 @@ import LoadingPopup from '@/components/LoadingPopup';
 import InteractiveMap from '@/components/map';
 import MapTitleChip from '@/components/MapTitleChip';
 import MenuButton from '@/components/MenuButton';
+import PendingCard from '@/components/PendingCard';
 import PlanForm from '@/components/PlanForm';
 import PriceModal from '@/components/PriceModal';
 import RoutePreview from '@/components/RoutePreview';
@@ -66,8 +67,9 @@ export default function HomeScreen() {
   const [pricePerKm, setPricePerKm] = useState<number | null>(null);
   // Which driver setting's popup is open, if any.
   const [editing, setEditing] = useState<'mdd' | 'price' | null>(null);
-  // 'home' shows recent / saved trips; 'plan' shows the search form and results.
-  const [view, setView] = useState<'home' | 'plan'>('home');
+  // 'home' shows recent / saved trips; 'plan' shows the search form and results; 'trip' shows
+  // the driver's ride.
+  const [view, setView] = useState<'home' | 'plan' | 'trip'>('home');
 
   // Driver side: the cancel confirmation.
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -95,7 +97,7 @@ export default function HomeScreen() {
   const driver = useDriverFlow(userId, driverMode);
   const drawerStatus = useDrawerStatus();
   const clearPassenger = passenger.clear;
-  const clearDriver = driver.clear;
+  const clearDriverMessage = driver.clearMessage;
   const places = useSavedTrips(userId);
   const {
     preview, setPreview, loading: quickLoading, start: startPreview,
@@ -130,10 +132,18 @@ export default function HomeScreen() {
 
   const tripId = driver.trip?.rideId;
 
-  // A freshly posted (or restored) trip gets the taller sheet.
+  // A ride that appears while Home is idle (posted, or found when the app opens) is opened. One
+  // that appears while planning stays a card, so the form is not replaced.
+  const [seenTripId, setSeenTripId] = useState<string>();
+  if (tripId !== seenTripId) {
+    setSeenTripId(tripId);
+    if (tripId && view === 'home') setView('trip');
+  }
+
+  // The ride gets the taller sheet.
   useEffect(() => {
-    if (tripId) sheetRef.current?.snapToIndex(SNAP.TRIP);
-  }, [tripId]);
+    if (tripId && view === 'trip') sheetRef.current?.snapToIndex(SNAP.TRIP);
+  }, [tripId, view]);
 
   // Rider: look for drivers on the previewed route. The list takes over the screen when found.
   async function onFind() {
@@ -220,19 +230,24 @@ export default function HomeScreen() {
     }
     passenger.clear();
     const ok = await driver.post(pickup, destination, when ?? new Date(), mdd, pricePerKm);
-    if (ok) setPreview(null);
+    if (ok) {
+      setPreview(null);
+      // The ride is saved, so the form starts empty next time.
+      setPickup('');
+      setDestination('');
+      setView('trip');
+    }
   }
 
-  const active = !!driver.trip || passenger.results.length > 0 || !!passenger.msg || !!driver.msg;
   // Empty the form and anything it produced, leaving the sheet where it is.
   const clearFields = useCallback(() => {
     resetResults();
     clearPassenger();
-    clearDriver();
+    clearDriverMessage();
     setPreview(null);
     setPickup('');
     setDestination('');
-  }, [clearDriver, clearPassenger, resetResults, setPreview]);
+  }, [clearDriverMessage, clearPassenger, resetResults, setPreview]);
   // Same, but also closes the keyboard and lowers the sheet (used when leaving the plan view).
   const clearAll = useCallback(() => {
     Keyboard.dismiss();
@@ -241,11 +256,12 @@ export default function HomeScreen() {
   }, [clearFields]);
 
   const previewNow = preview && preview.driver === driverMode && !showResults ? preview : null;
-  const showTrip = !!driver.trip && !previewNow;
+  const showTrip = view === 'trip' && !!driver.trip && !previewNow;
   const showPreview = !!previewNow;
 
-  // A posted trip, a route preview or a set of results always shows the plan view.
-  const showPlan = view === 'plan' || active || showPreview;
+  // A ride, a route preview or a set of results is shown over the plan view.
+  const active = passenger.results.length > 0 || !!passenger.msg || (view !== 'home' && !!driver.msg);
+  const showPlan = view === 'plan' || showTrip || active || showPreview;
 
   const {
     animationConfigs, sheetPosition, pillStyle, noticeStyle, snapPoints, raisedHeight, setPreviewHeight,
@@ -270,6 +286,25 @@ export default function HomeScreen() {
   function closePlan() {
     clearAll();
     setView('home');
+  }
+
+  // Back from the driver's ride to Home, where it stays as a card.
+  const leaveTrip = useCallback(() => {
+    clearAll();
+    setView('home');
+  }, [clearAll]);
+
+  // The card for the driver's ride was tapped.
+  function openTrip() {
+    clearFields();
+    setView('trip');
+  }
+
+  // The ride was finished or cancelled: go Home and bring up the next one, if any.
+  function tripEnded() {
+    driver.clear();
+    closePlan();
+    void driver.sync();
   }
 
   const leaveAutomaticSearch = useCallback(() => {
@@ -319,7 +354,8 @@ export default function HomeScreen() {
         else backToPreview();
       }
       else if (showPreview) backFromPreview();
-      else if (showPlan && !showTrip) {
+      else if (showTrip) leaveTrip();
+      else if (showPlan) {
         clearAll();
         setView('home');
       }
@@ -328,7 +364,7 @@ export default function HomeScreen() {
     });
     return () => subscription.remove();
   }, [automatic, backFromDrivers, backFromPreview, backToPreview, clearAll, drawerStatus, leaveAutomaticSearch,
-    showMatch, showPlan, showPreview, showResults, showTrip]));
+    leaveTrip, showMatch, showPlan, showPreview, showResults, showTrip]));
 
   // Driver answered a request.
   async function answer(accept: boolean, req: Req | null = driver.popup) {
@@ -345,7 +381,7 @@ export default function HomeScreen() {
     try {
       await cancelPostedRide(driver.trip.rideId);
       setConfirmCancel(false);
-      closePlan();
+      tripEnded();
     } catch (e) {
       console.error(e);
       setConfirmCancel(false);
@@ -358,7 +394,7 @@ export default function HomeScreen() {
   const inProgress = driver.trip?.status === 'in_progress';
   const map = homeMapContent({
     shownTrip: showTrip ? driver.trip : null,
-    trip: driver.trip,
+    trip: showTrip ? driver.trip : null,
     preview: previewNow,
     requestMarkers: driver.markers,
     pickup: passenger.pickup,
@@ -367,6 +403,19 @@ export default function HomeScreen() {
   });
 
   const message = driver.msg || passenger.msg;
+
+  // The driver's ride while the sheet shows something else.
+  const tripCard = driverMode && driver.trip && !showTrip ? (
+    <PendingCard
+      role='driver'
+      status={inProgress ? 'in_progress' : driver.passengers.length ? 'booked' : 'scheduled'}
+      title={driver.trip.endText}
+      when={driver.trip.when.toLocaleString([], {
+        weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      })}
+      onPress={openTrip}
+    />
+  ) : null;
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -402,7 +451,8 @@ export default function HomeScreen() {
           {showPlan && !showTrip && !showPreview && (
             <View pointerEvents='none' style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }]} />
           )}
-          {!showPreview && (!showPlan || showTrip) && <MenuButton onPress={() => navigation.openDrawer()} />}
+          {!showPlan && <MenuButton onPress={() => navigation.openDrawer()} />}
+          {showTrip && <BackButton onPress={leaveTrip} />}
           {showTrip && (
             <MapTitleChip
               title={inProgress ? 'Trip in progress' : tripTitle(driver.popup, driver.passengers.length)}
@@ -436,6 +486,7 @@ export default function HomeScreen() {
             >
               {!showPlan ? (
                 <HomeSheetContent
+                  activeTrip={tripCard}
                   recent={places.recent}
                   saved={places.saved}
                   onPickRecent={onPickRecentTrip}
@@ -453,7 +504,7 @@ export default function HomeScreen() {
                     setConfirmCancel(false);
                     driver.markStarted();
                   }}
-                  onFinished={closePlan}
+                  onFinished={tripEnded}
                   onCancel={() => setConfirmCancel(true)}
                   onScheduleAnother={() => {
                     clearFields();
@@ -483,6 +534,7 @@ export default function HomeScreen() {
               ) : (
                 <>
                   <PlanForm
+                    activeTrip={tripCard}
                     onBack={closePlan}
                     driverMode={driverMode}
                     switching={switching}

@@ -1,4 +1,4 @@
-import { isExpired, laterOf, searchCutoff } from './expiry';
+import { isExpired, laterOf, OVERDUE_MS, searchCutoff } from './expiry';
 import { classifyTrip, dayRange, localDate, type Pt } from './geo';
 import { buildGoogleMapsLegs } from './googleMapsRoute';
 import { getDrivingTimeMatrix, queuePlanningOsrmRequest } from './osrmTable';
@@ -147,7 +147,8 @@ export async function postTrip(args: {
 
 const tripFields = 'rideId, status, driverStartLocation, driverEndLocation, route, tripMdd, departAt, pricePerKm, startLat, startLng, endLat, endLng, plan';
 
-// Driver: their earliest unfinished trip, so it can be shown again after a restart.
+// Driver: the unfinished trip to show on Home. One under way comes first, then the next one that
+// is not long overdue, so a forgotten ride does not sit in front of today's.
 export async function loadActiveTrip(driverId: string): Promise<Trip | null> {
   if (!isUuid(driverId)) return null;
   const { data, error } = await supabase
@@ -155,11 +156,14 @@ export async function loadActiveTrip(driverId: string): Promise<Trip | null> {
     .select(tripFields)
     .eq('driverId', driverId)
     .in('status', activeRideStatuses)
-    .order('departAt', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .order('departAt', { ascending: true });
   if (error) throw error;
-  return asTrip(data);
+  const rides = data ?? [];
+  const overdueBefore = Date.now() - OVERDUE_MS;
+  const next = rides.find((r) => r.status === 'in_progress')
+    ?? rides.find((r) => !r.departAt || Date.parse(r.departAt) >= overdueBefore)
+    ?? rides[0];
+  return asTrip(next ?? null);
 }
 
 export async function loadDriverTrip(rideId: string, driverId: string): Promise<Trip | null> {

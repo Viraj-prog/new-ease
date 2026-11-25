@@ -14,7 +14,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 // The Rides tab: trips the user posted as a driver, and rides they booked as a passenger.
-export function useMyRides(userId: string | undefined, watchBookings: boolean) {
+export function useMyRides(userId: string | undefined, watchPending: boolean) {
   const [posted, setPosted] = useState<PostedRide[]>([]);
   const [booked, setBooked] = useState<BookedRide[]>([]);
   const [searches, setSearches] = useState<OpenSearch[]>([]);
@@ -44,19 +44,24 @@ export function useMyRides(userId: string | undefined, watchBookings: boolean) {
     }
   }, [userId]);
 
-  // Keep the rider's pending bookings current while a driver starts or finishes.
+  // Keep Pending current while it is showing.
   useFocusEffect(
     useCallback(() => {
       void reload();
-      if (!watchBookings || !userId) return;
+      if (!watchPending || !userId) return;
       let active = true;
       let checking = false;
       const timer = setInterval(async () => {
         if (checking) return;
         checking = true;
         try {
-          const [rows, open] = await Promise.all([loadBookedRides(userId), loadOpenSearches(userId)]);
+          const [mine, rows, open] = await Promise.all([
+            loadPostedRides(userId),
+            loadBookedRides(userId),
+            loadOpenSearches(userId),
+          ]);
           if (active) {
+            setPosted(mine);
             setBooked(rows);
             setSearches(open);
           }
@@ -70,7 +75,7 @@ export function useMyRides(userId: string | undefined, watchBookings: boolean) {
         active = false;
         clearInterval(timer);
       };
-    }, [reload, userId, watchBookings]),
+    }, [reload, userId, watchPending]),
   );
 
   // Both return an error message on failure, or null on success.

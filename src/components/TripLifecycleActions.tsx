@@ -183,7 +183,7 @@ export default function TripLifecycleActions({ rideId, status, disabled, departA
 const styles = StyleSheet.create({
   actions: { flexGrow: 1, gap: 8 },
   row: { flexDirection: 'row', gap: 8 },
-  button: { flexGrow: 1, borderRadius: 14, minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
+  button: { flexGrow: 1, borderRadius: 22, minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   largeButton: { minHeight: 54, borderRadius: 18 },
   label: { fontFamily: fonts.semibold, fontSize: 15 },
   progress: { fontFamily: fonts.medium, fontSize: 13 },
