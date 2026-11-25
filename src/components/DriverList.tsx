@@ -25,6 +25,11 @@ type Props = {
   onChoose: (rideId: string) => void;
   onBack: () => void;
   onConfirm: () => void;
+  // Delivery: its own summary line, price and button label, and no departure time.
+  summary?: string;
+  priceText?: string;
+  confirmLabel?: string;
+  hideDeparture?: boolean;
 };
 
 const initialsOf = (name: string) =>
@@ -39,6 +44,7 @@ const initialsOf = (name: string) =>
 // Full-screen "Available drivers" list. Tapping a card selects it; Confirm sends the request.
 export default function DriverList({
   drivers, emptyMessage, notice, onRetry, chosenId, offerStatuses, sendingRideId, onChoose, onBack, onConfirm,
+  summary, priceText, confirmLabel, hideDeparture,
 }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -59,7 +65,7 @@ export default function DriverList({
         {notice && <View style={styles.notice}>{notice}</View>}
         {n > 0 ? (
           <Text style={styles.count}>
-            {n} driver{n === 1 ? '' : 's'} match{n === 1 ? 'es' : ''} your route
+            {summary ?? `${n} driver${n === 1 ? '' : 's'} match${n === 1 ? 'es' : ''} your route`}
           </Text>
         ) : !!emptyMessage && (
           <View style={styles.list}>
@@ -99,10 +105,12 @@ export default function DriverList({
                         {chosen ? ` · ${x.minAway} min away` : ''}
                       </Text>
                     </View>
-                    <Text style={styles.rating}>Departs {formatDriverDeparture(d.departAt)}</Text>
+                    {!hideDeparture && <Text style={styles.rating}>Departs {formatDriverDeparture(d.departAt)}</Text>}
                     {status && <Text style={styles.rating}>{offerStatusLabels[status]}</Text>}
                   </View>
-                  <Text style={d.fare === null ? styles.rating : styles.price}>{formatDriverFare(d.fare)}</Text>
+                  <Text style={d.fare === null && !priceText ? styles.rating : styles.price}>
+                    {priceText ?? formatDriverFare(d.fare)}
+                  </Text>
                 </View>
                 {chosen && <VehicleBox model={x.model} detail={x.detail} plate={x.plate} />}
               </Pressable>
@@ -118,7 +126,9 @@ export default function DriverList({
         <View style={[styles.confirmWrap, { paddingBottom: insets.bottom + 16 }]}>
           <PressButton style={styles.confirm} onPress={onConfirm} disabled={!!chosenStatus || !!sendingRideId}>
             <Text style={styles.confirmText}>
-              {sendingRideId === chosenId ? 'Sending…' : chosenStatus ? offerStatusLabels[chosenStatus] : 'Send request'}
+              {sendingRideId === chosenId
+                ? 'Sending…'
+                : chosenStatus ? offerStatusLabels[chosenStatus] : confirmLabel ?? 'Send request'}
             </Text>
           </PressButton>
         </View>

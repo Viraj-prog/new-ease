@@ -16,6 +16,11 @@ type Props = {
   sending: boolean;
   // True when other drivers exist; otherwise the left button is "Cancel".
   hasOthers: boolean;
+  // Delivery shows its own price and label, and "min away" in place of a departure time.
+  priceText?: string;
+  priceLabel?: string;
+  awayText?: string;
+  confirmLabel?: string;
   onSeeOthers: () => void;
   onCancel: () => void;
   onConfirm: () => void;
@@ -44,7 +49,7 @@ export default function DriverMatchCard(p: Props) {
           <Ionicons name='checkmark' size={18} color={colors.onTint} />
           <Text style={styles.badgeText}>Best match</Text>
         </View>
-        <Text style={styles.away}>Departs {formatDriverDeparture(p.driver.departAt)}</Text>
+        <Text style={styles.away}>{p.awayText ?? `Departs ${formatDriverDeparture(p.driver.departAt)}`}</Text>
       </View>
 
       <View style={styles.person}>
@@ -63,8 +68,10 @@ export default function DriverMatchCard(p: Props) {
           </View>
         </View>
         <View style={styles.priceCol}>
-          <Text style={p.driver.fare === null ? styles.fare : styles.price}>{formatDriverFare(p.driver.fare)}</Text>
-          {p.driver.fare !== null && <Text style={styles.fare}>Est. fare</Text>}
+          <Text style={p.driver.fare === null && !p.priceText ? styles.fare : styles.price}>
+            {p.priceText ?? formatDriverFare(p.driver.fare)}
+          </Text>
+          {(p.driver.fare !== null || !!p.priceText) && <Text style={styles.fare}>{p.priceLabel ?? 'Est. fare'}</Text>}
         </View>
       </View>
 
@@ -80,7 +87,7 @@ export default function DriverMatchCard(p: Props) {
           disabled={p.sending || !!p.offerStatus}
         >
           <Text style={[styles.buttonText, { color: colors.onBrand }]}>
-            {p.sending ? 'Sending…' : p.offerStatus ? offerStatusLabels[p.offerStatus] : 'Send request'}
+            {p.sending ? 'Sending…' : p.offerStatus ? offerStatusLabels[p.offerStatus] : p.confirmLabel ?? 'Send request'}
           </Text>
         </PressButton>
       </View>

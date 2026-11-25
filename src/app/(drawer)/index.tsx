@@ -12,7 +12,6 @@ import MenuButton from '@/components/MenuButton';
 import PlanForm from '@/components/PlanForm';
 import RoutePreview, { PlannedRouteSummary } from '@/components/RoutePreview';
 import SearchPill from '@/components/SearchPill';
-import ThemeToggle from '@/components/ThemeToggle';
 import TripLifecycleActions from '@/components/TripLifecycleActions';
 import TripSheet, { tripTitle } from '@/components/TripSheet';
 import { useDriverFlow } from '@/hooks/useDriverFlow';
@@ -33,7 +32,7 @@ import { type Colors } from '@/styles/theme';
 import BottomSheet, { BottomSheetScrollView, useBottomSheetSpringConfigs } from '@gorhom/bottom-sheet';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useDrawerStatus, type DrawerNavigationProp } from 'expo-router/drawer';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
   Keyboard,
@@ -53,8 +52,9 @@ import InlineNotice from '@/components/InlineNotice';
 // typing, driver list).
 const MID_FRACTION = 0.38;
 const TRIP_FRACTION = 0.46;
-const SNAP_POINTS = ['23%', `${MID_FRACTION * 100}%`, `${TRIP_FRACTION * 100}%`, '94%'];
 const SNAP = { MID: 1, TRIP: 2, FULL: 3 };
+// Height of the sheet's drag handle, above its content.
+const HANDLE_HEIGHT = 24;
 
 // How much farther than the max divergence a driver will go if they approve a request.
 // There is no control for it any more, so it stays at this default.
@@ -96,6 +96,8 @@ export default function HomeScreen() {
     distanceKm: number;
     durationMin: number;
   } | null>(null);
+  // How tall the preview's contents are, measured once they are on screen.
+  const [previewHeight, setPreviewHeight] = useState(0);
 
   // Rider: the driver tapped in the "Available drivers" list.
   const [chosenId, setChosenId] = useState<string | null>(null);
@@ -165,9 +167,6 @@ export default function HomeScreen() {
   const sheetPosition = useSharedValue(windowHeight * (1 - MID_FRACTION));
   const pillStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: sheetPosition.get() - 25 }],
-  }));
-  const toggleStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetPosition.get() - 84 }],
   }));
   // A message from posting a trip or finding a driver floats just above the sheet's top edge.
   const noticeStyle = useAnimatedStyle(() => ({
@@ -414,6 +413,18 @@ export default function HomeScreen() {
   // A posted trip, a route preview or a set of results always shows the plan view.
   const showPlan = view === 'plan' || active || showPreview;
 
+  // A driver's route preview has an extra row, so on some phones it needs more than the usual trip
+  // height to keep its main button on screen.
+  const tripHeight = windowHeight * TRIP_FRACTION;
+  const previewNeeds = showPreview
+    ? Math.min(previewHeight + HANDLE_HEIGHT + insets.bottom + 12, windowHeight * 0.9)
+    : 0;
+  const tallPreview = previewNeeds > tripHeight ? Math.ceil(previewNeeds) : null;
+  const snapPoints = useMemo(
+    () => ['23%', `${MID_FRACTION * 100}%`, tallPreview ?? `${TRIP_FRACTION * 100}%`, '94%'],
+    [tallPreview],
+  );
+
   // Back from the driver list returns to the route preview.
   const backToPreview = useCallback(() => {
     clearPassenger();
@@ -546,8 +557,16 @@ export default function HomeScreen() {
   const inProgress = driver.trip?.status === 'in_progress';
   const retryPassenger = driver.acceptError?.retry;
   const route = previewNow?.route ?? visiblePlan?.points ?? driver.trip?.route ?? [];
+  // A posted trip shows its own start and end like the preview does, then the purple dots.
+  const tripEnds: MapMarker[] =
+    showTrip && route.length > 1
+      ? [
+          { id: 'trip-start', point: route[0], color: colors.brand },
+          { id: 'trip-end', point: route[route.length - 1], color: colors.alert },
+        ]
+      : [];
   const markers: MapMarker[] = showTrip
-    ? driver.markers.map((m) => ({ ...m, color: colors.pickup }))
+    ? [...tripEnds, ...driver.markers.map((m) => ({ ...m, color: colors.pickup }))]
     : previewNow
     ? [
         { id: 'start', point: previewNow.start, color: colors.brand },
@@ -570,7 +589,7 @@ export default function HomeScreen() {
         padding={{
           top: insets.top + 90,
           right: 40,
-          bottom: windowHeight * (showTrip || showPreview ? TRIP_FRACTION : MID_FRACTION) + 20,
+          bottom: (showTrip || showPreview ? tallPreview ?? tripHeight : windowHeight * MID_FRACTION) + 20,
           left: 40,
         }}
       />
@@ -601,7 +620,7 @@ export default function HomeScreen() {
           <BottomSheet
             ref={sheetRef}
             index={1}
-            snapPoints={SNAP_POINTS}
+            snapPoints={snapPoints}
             animatedPosition={sheetPosition}
             enableDynamicSizing={false}
             enableOverDrag={false}
@@ -660,8 +679,10 @@ export default function HomeScreen() {
                     lifecycleActions={
                       <TripLifecycleActions
                         key={driver.trip.rideId}
+                        large
                         rideId={driver.trip.rideId}
                         status={driver.trip.status}
+                        departAt={driver.trip.when}
                         disabled={driver.responding || cancelling}
                         onChanged={(status) => {
                           if (status === 'in_progress') {
@@ -682,25 +703,26 @@ export default function HomeScreen() {
                   />
                 </>
               ) : previewNow ? (
-                <RoutePreview
-                  startText={pickup}
-                  endText={destination}
-                  when={when}
-                  onPickDate={() => pickDate(when ?? new Date(), setWhen)}
-                  onPickTime={() => pickTime(when ?? new Date(), setWhen)}
-                  distanceKm={previewNow.distanceKm}
-                  durationMin={previewNow.durationMin}
-                  maxDivergenceKm={driverMode ? mdd : undefined}
-                  pricePerKm={driverMode ? pricePerKm : undefined}
-                  onMaxDivergence={driverMode ? () => setMddOpen(true) : undefined}
-                  submitLabel={driverMode ? 'Schedule Ride' : 'Find driver'}
-                  onSubmit={driverMode ? onPost : onFind}
-                  loading={driverMode ? driver.loading : passenger.loading}
-                />
+                <View onLayout={(e) => setPreviewHeight(e.nativeEvent.layout.height)}>
+                  <RoutePreview
+                    startText={pickup}
+                    endText={destination}
+                    when={when}
+                    onPickDate={() => pickDate(when ?? new Date(), setWhen)}
+                    onPickTime={() => pickTime(when ?? new Date(), setWhen)}
+                    distanceKm={previewNow.distanceKm}
+                    durationMin={previewNow.durationMin}
+                    maxDivergenceKm={driverMode ? mdd : undefined}
+                    pricePerKm={driverMode ? pricePerKm : undefined}
+                    onMaxDivergence={driverMode ? () => setMddOpen(true) : undefined}
+                    submitLabel={driverMode ? 'Schedule Ride' : 'Find driver'}
+                    onSubmit={driverMode ? onPost : onFind}
+                    loading={driverMode ? driver.loading : passenger.loading}
+                  />
+                </View>
               ) : (
                 <>
                   <PlanForm
-                    title={driverMode ? 'Plan your ride' : 'Book your ride'}
                     onBack={closePlan}
                     driverMode={driverMode}
                     switching={switching}
@@ -767,9 +789,6 @@ export default function HomeScreen() {
           {/* Drawn after the sheet so they sit on top of its edge. */}
           {!showPlan && (
             <>
-              <Animated.View style={[styles.toggle, toggleStyle]}>
-                <ThemeToggle />
-              </Animated.View>
               <Animated.View style={[styles.pill, pillStyle]}>
                 <SearchPill onPress={() => openPlan()} />
               </Animated.View>
@@ -835,7 +854,6 @@ const makeStyles = (c: Colors) =>
     },
     // Room for the pill that overlaps the top of the sheet.
     homeContent: { paddingTop: 21 },
-    toggle: { position: 'absolute', top: 0, right: 16 },
     pill: { position: 'absolute', top: 0, left: 16, right: 16 },
     message: { marginTop: 12 },
     // Zero-height row at the sheet's top edge; the card hangs upward from it.

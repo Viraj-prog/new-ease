@@ -4,8 +4,8 @@ import Slider from '@/components/Slider';
 import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import { type Colors } from '@/styles/theme';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import PressButton from '@/components/PressButton';
 
@@ -30,6 +30,16 @@ export default function DivergenceModal({ visible, value, pricePerKm, onSave, on
   const enteredPrice = price.trim().replace(',', '.');
   const validPrice = /^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(enteredPrice)
     && Number.isFinite(Number(enteredPrice));
+  // While the keyboard is up there is not room for the explanation as well as the price field.
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    const shown = Keyboard.addListener('keyboardDidShow', () => setTyping(true));
+    const hidden = Keyboard.addListener('keyboardDidHide', () => setTyping(false));
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, []);
 
   return (
     <PopupShell
@@ -49,10 +59,12 @@ export default function DivergenceModal({ visible, value, pricePerKm, onSave, on
         </Pressable>
       </View>
 
-      <Text style={styles.body}>
-        How far you are willing to detour to pick up and drop off a rider. Riders outside this
-        distance will not be matched with your trip.
-      </Text>
+      {!typing && (
+        <Text style={styles.body}>
+          How far you are willing to detour to pick up and drop off a rider. Riders outside this
+          distance will not be matched with your trip.
+        </Text>
+      )}
 
       <Text style={styles.value}>{draft} km</Text>
       <Text style={styles.caption}>from your route</Text>

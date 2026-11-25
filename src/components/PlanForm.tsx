@@ -12,8 +12,6 @@ import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import PressButton from '@/components/PressButton';
 
 type Props = {
-  // "Plan your ride" for drivers, "Book your ride" for riders.
-  title: string;
   // Left out while a trip is posted, so the form cannot be dismissed from under it.
   onBack?: () => void;
   driverMode: boolean;
@@ -91,18 +89,21 @@ export default function PlanForm(p: Props) {
     <View>
       <View style={styles.header}>
         {p.onBack && (
-          <Pressable accessibilityRole='button' accessibilityLabel='Back' onPress={p.onBack} hitSlop={10}>
+          <Pressable
+            style={styles.back}
+            accessibilityRole='button'
+            accessibilityLabel='Back'
+            onPress={p.onBack}
+            hitSlop={10}
+          >
             <Icon name='arrow-left' color={colors.text} />
           </Pressable>
         )}
-        <Text style={styles.title}>{p.title}</Text>
         <SegmentedToggle
-          compact
-          // Same size as the theme toggle, so it is easy to tap.
-          segment={40}
+          style={styles.roleToggle}
           options={[
-            { key: 'driver', icon: 'steering-wheel' },
-            { key: 'rider', icon: 'rider' },
+            { key: 'driver', icon: 'steering-wheel', label: 'Driving' },
+            { key: 'rider', icon: 'rider', label: 'Riding' },
           ]}
           value={p.driverMode ? 'driver' : 'rider'}
           onChange={(k) => p.onRole(k === 'driver')}
@@ -112,7 +113,7 @@ export default function PlanForm(p: Props) {
 
       <View style={styles.pillRow}>
         <PressButton ghost style={styles.pill} onPress={p.onPickDate}>
-          <Icon name='calendar' size={20} color={colors.text} />
+          <Icon name='calendar' size={16} color={colors.text} />
           <Text style={styles.pillText}>{formatWhen(p.when ?? new Date())}</Text>
         </PressButton>
         {p.driverOptions && (
@@ -191,9 +192,9 @@ export default function PlanForm(p: Props) {
         </View>
       </View>
 
-      <Pressable onPress={p.onClear} hitSlop={8}>
+      <PressButton ghost style={styles.clearButton} onPress={p.onClear} hitSlop={8}>
         <Text style={styles.clear}>Clear</Text>
-      </Pressable>
+      </PressButton>
 
       <View style={styles.chips}>
         {slotItems(p.saved).map((s) => (
@@ -233,24 +234,26 @@ const FIELD_HEIGHT = 68;
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    header: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 12, marginBottom: 22 },
-    title: { flex: 1, fontFamily: fonts.titleSemibold, fontSize: 23, color: c.text },
-    // Starts where the Start / End cells start: the dots column (24) plus the gap (12).
-    pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginLeft: 36 },
+    header: { alignItems: 'center', justifyContent: 'center', marginTop: 12, marginBottom: 22 },
+    // Out of the row, so the toggle is centred on the sheet and not on the space beside the arrow.
+    back: { position: 'absolute', left: 0 },
+    roleToggle: { width: 240 },
+    pillRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10 },
     pill: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      paddingHorizontal: 16,
-      minHeight: 40,
+      gap: 6,
+      paddingHorizontal: 12,
+      minHeight: 32,
       maxWidth: '100%',
-      paddingVertical: 8,
-      borderRadius: 20,
+      paddingVertical: 5,
+      borderRadius: 16,
       backgroundColor: c.borderStrong,
     },
-    pillText: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 15, color: c.text },
+    pillText: { flexShrink: 1, fontFamily: fonts.medium, fontSize: 13, color: c.text },
     fields: { flexDirection: 'row', gap: 12, marginTop: 12 },
-    connector: { width: 24, alignItems: 'center', paddingTop: 25, paddingBottom: 22 },
+    // As wide as the swap column on the other side, so the two cells sit in the centre.
+    connector: { width: 40, alignItems: 'center', paddingTop: 25, paddingBottom: 22 },
     dot: { width: 18, height: 18, borderRadius: 9 },
     dots: { flex: 1, justifyContent: 'center', gap: 14 },
     miniDot: { width: 4, height: 4, borderRadius: 2 },
@@ -295,13 +298,15 @@ const makeStyles = (c: Colors) =>
     chipBare: { alignSelf: 'stretch' },
     chipInput: { fontFamily: fonts.semibold, fontSize: 19, color: c.text, paddingVertical: 0 },
     chipInputEmpty: { minWidth: 150 },
-    clear: {
-      fontFamily: fonts.semibold,
-      fontSize: 16,
-      color: c.brand,
-      marginTop: 14,
-      marginLeft: 52,
+    clearButton: {
+      alignSelf: 'flex-start',
+      marginTop: 8,
+      marginLeft: 40,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 14,
     },
+    clear: { fontFamily: fonts.semibold, fontSize: 16, color: c.brand },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 24 },
     savedChip: {
       flexDirection: 'row',

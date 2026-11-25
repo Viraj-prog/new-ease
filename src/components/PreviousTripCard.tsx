@@ -41,6 +41,9 @@ export default function PreviousTripCard({
   const avatar = colors.avatars[avatarIndex % colors.avatars.length];
   // The user drove: the other person was the rider, and the other way round.
   const otherRole = trip.role === 'driver' ? 'Rider' : 'Driver';
+  // Only a finished ride moved money: green if you earned it, red if you paid it.
+  const finished = !trip.statusLabel || trip.statusLabel === 'Completed';
+  const money = !finished || trip.price == null ? null : trip.role === 'driver' ? 'earned' : 'paid';
 
   return (
     <View style={styles.card}>
@@ -49,9 +52,17 @@ export default function PreviousTripCard({
           <Text style={styles.when}>{whenText(trip.departAt)}</Text>
           {trip.statusLabel && <Text style={styles.status}>{trip.statusLabel}</Text>}
         </View>
-        <Text style={styles.price}>
-          {trip.price == null ? '—' : `${trip.estimated ? '~' : ''}$${trip.price.toFixed(2)}`}
-        </Text>
+        <View style={[styles.pricePill, money === 'earned' && styles.earned, money === 'paid' && styles.paid]}>
+          <Text
+            style={[
+              styles.price,
+              money === 'earned' && { color: colors.onSuccessTint },
+              money === 'paid' && { color: colors.alertText },
+            ]}
+          >
+            {trip.price == null ? '—' : `${trip.estimated ? '~' : ''}$${trip.price.toFixed(2)}`}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.stops}>
@@ -94,6 +105,9 @@ const makeStyles = (c: Colors) =>
     top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     when: { fontFamily: fonts.regular, fontSize: 14, color: c.textSecondary },
     status: { fontFamily: fonts.semibold, fontSize: 12, color: c.textSecondary, marginTop: 4 },
+    pricePill: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4 },
+    earned: { backgroundColor: c.successTint },
+    paid: { backgroundColor: 'rgba(255,107,107,0.18)' },
     price: { fontFamily: fonts.titleSemibold, fontSize: 22, color: c.text },
     // Start and end in a light grey cell, like the route preview.
     stops: {

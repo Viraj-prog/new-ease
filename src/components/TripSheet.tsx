@@ -71,7 +71,8 @@ export default function TripSheet(p: Props) {
   const startCancel = (
     <View>
       <View style={styles.row}>
-        {p.lifecycleActions}
+        {/* The same width as Cancel trip, even with a line of text under Start trip. */}
+        <View style={styles.half}>{p.lifecycleActions}</View>
         {p.onCancel && (
           <PressButton style={[styles.button, { backgroundColor: colors.alert }]} onPress={p.onCancel}>
             <Text style={[styles.buttonText, { color: colors.onAlert }]}>Cancel trip</Text>
@@ -178,7 +179,7 @@ export default function TripSheet(p: Props) {
     <View>
       {stops}
       <View style={styles.empty}>
-        <Icon name='users' size={34} color={colors.textSecondary} />
+        <Icon name='users' size={24} color={colors.textSecondary} />
         <Text style={styles.emptyTitle}>No passengers yet</Text>
         <Text style={styles.emptyText}>
           Riders within your {p.mddKm} km divergence can request this trip.
@@ -193,18 +194,19 @@ export default function TripSheet(p: Props) {
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    empty: { alignItems: 'center', gap: 6, marginTop: 18, marginBottom: 16 },
-    emptyTitle: { fontFamily: fonts.titleSemibold, fontSize: 22, color: c.text, marginTop: 4 },
+    empty: { alignItems: 'center', gap: 3, marginTop: 10, marginBottom: 8 },
+    emptyTitle: { fontFamily: fonts.titleSemibold, fontSize: 17, color: c.text, marginTop: 2 },
     emptyText: {
       fontFamily: fonts.regular,
-      fontSize: 15,
-      lineHeight: 21,
+      fontSize: 13,
+      lineHeight: 18,
       color: c.textSecondary,
       textAlign: 'center',
     },
-    message: { fontFamily: fonts.regular, fontSize: 13, color: c.textSecondary, marginTop: 6 },
-    divider: { height: 1, backgroundColor: c.border, marginBottom: 16 },
+    message: { fontFamily: fonts.regular, fontSize: 12, color: c.textSecondary, marginTop: 4 },
+    divider: { height: 1, backgroundColor: c.border, marginBottom: 10 },
     row: { flexDirection: 'row', gap: 12, marginTop: 8 },
+    half: { flex: 1 },
     button: { flex: 1, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
     buttonText: { fontFamily: fonts.semibold, fontSize: 17 },
     link: {

@@ -149,7 +149,7 @@ export default function RidesScreen() {
         contentContainerStyle={{ paddingTop: insets.top + 80, paddingBottom: 40, paddingHorizontal: 20 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text style={styles.title}>{driverMode ? 'Scheduled Rides' : 'Trips'}</Text>
+        <Text style={styles.title}>Scheduled Trips</Text>
         <SegmentedToggle textOnly style={styles.tabs} options={tabs} value={tab} onChange={setTab} />
 
         {loading ? (
@@ -207,7 +207,7 @@ export default function RidesScreen() {
                           )
                         : undefined}
                       >
-                        <TripLifecycleActions rideId={r.rideId} status={r.status} onChanged={(status) => {
+                        <TripLifecycleActions rideId={r.rideId} status={r.status} departAt={r.departAt} onChanged={(status) => {
                           if (status === 'completed') setTab('previous');
                           void reload();
                         }} />

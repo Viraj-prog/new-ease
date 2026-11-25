@@ -9,13 +9,18 @@ import { useTheme } from '@/lib/theme';
 import { fonts } from '@/styles/fonts';
 import * as Linking from 'expo-linking';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   rideId: string;
   status: RideStatus;
   disabled?: boolean;
+  // When the ride leaves. Start trip stays off until then. The check is in the app only: the
+  // database does not refuse an early start.
+  departAt?: Date | string | null;
+  // Taller buttons, to match the ones beside them in the Home trip sheet.
+  large?: boolean;
   onChanged: (status: 'in_progress' | 'completed') => void;
 };
 
@@ -28,7 +33,7 @@ async function loadDirections(rideId: string, driverId: string, storageKey: stri
   return { legs, index };
 }
 
-export default function TripLifecycleActions({ rideId, status, disabled, onChanged }: Props) {
+export default function TripLifecycleActions({ rideId, status, disabled, departAt, large, onChanged }: Props) {
   const { session } = useAuth();
   const userId = session?.user.id;
   const { colors } = useTheme();
@@ -36,6 +41,16 @@ export default function TripLifecycleActions({ rideId, status, disabled, onChang
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ index: number; count: number } | null>(null);
   const storageKey = `tripNavigation.${userId}.${rideId}`;
+  // The clock, so Start trip unlocks by itself when the time comes.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (status !== 'scheduled') return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [status]);
+  const startsAt = departAt ? new Date(departAt) : null;
+  // To the minute: a 3:00 ride can be started from 3:00 on.
+  const early = !!startsAt && now < Math.floor(startsAt.getTime() / 60000) * 60000;
 
   useFocusEffect(useCallback(() => {
     if (!userId || status !== 'in_progress') return;
@@ -105,15 +120,30 @@ export default function TripLifecycleActions({ rideId, status, disabled, onChang
   }
 
   const unavailable = busy || disabled || !userId;
+  const button = [styles.button, large && styles.largeButton];
   if (status === 'scheduled') {
     return (
-      <PressButton
-        disabled={unavailable}
-        style={[styles.button, { backgroundColor: colors.success }]}
-        onPress={() => void openDirections('start')}
-      >
-        <Text style={[styles.label, { color: colors.onSuccess }]}>{busy ? 'Starting…' : 'Start trip'}</Text>
-      </PressButton>
+      <View style={styles.actions}>
+        <PressButton
+          disabled={unavailable || early}
+          style={[button, { backgroundColor: early ? colors.pill : colors.success }]}
+          onPress={() => void openDirections('start')}
+        >
+          <Text style={[styles.label, { color: early ? colors.textSecondary : colors.onSuccess }]}>
+            {busy ? 'Starting…' : 'Start trip'}
+          </Text>
+        </PressButton>
+        {early && startsAt && (
+          <Text style={[styles.hint, { color: colors.textSecondary }]}>
+            Available {startsAt.toLocaleString([], {
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+            })}
+          </Text>
+        )}
+      </View>
     );
   }
   if (status !== 'in_progress') return null;
@@ -128,21 +158,21 @@ export default function TripLifecycleActions({ rideId, status, disabled, onChang
       <View style={styles.row}>
         <PressButton
           disabled={unavailable}
-          style={[styles.button, { backgroundColor: colors.brand }]}
+          style={[button, { backgroundColor: colors.brand }]}
           onPress={() => void openDirections('resume')}
         >
           <Text style={[styles.label, { color: colors.onBrand }]}>Resume</Text>
         </PressButton>
         <PressButton
           disabled={unavailable}
-          style={[styles.button, { backgroundColor: colors.success }]}
+          style={[button, { backgroundColor: colors.success }]}
           onPress={confirmFinish}
         >
           <Text style={[styles.label, { color: colors.onSuccess }]}>Finish trip</Text>
         </PressButton>
       </View>
       {progress && progress.index + 1 < progress.count && (
-        <PressButton ghost disabled={unavailable} style={styles.button} onPress={confirmNextLeg}>
+        <PressButton ghost disabled={unavailable} style={button} onPress={confirmNextLeg}>
           <Text style={[styles.label, { color: colors.brand }]}>Next leg</Text>
         </PressButton>
       )}
@@ -154,6 +184,8 @@ const styles = StyleSheet.create({
   actions: { flexGrow: 1, gap: 8 },
   row: { flexDirection: 'row', gap: 8 },
   button: { flexGrow: 1, borderRadius: 14, minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
+  largeButton: { minHeight: 54, borderRadius: 18 },
   label: { fontFamily: fonts.semibold, fontSize: 15 },
   progress: { fontFamily: fonts.medium, fontSize: 13 },
+  hint: { fontFamily: fonts.regular, fontSize: 12, textAlign: 'center' },
 });

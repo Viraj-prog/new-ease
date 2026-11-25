@@ -1,6 +1,6 @@
 import { useTheme } from '@/lib/theme';
 import { type Colors } from '@/styles/theme';
-import { Modal, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
 type Props = {
   visible: boolean;
@@ -35,21 +35,28 @@ export default function PopupShell({
 
   return (
     <Modal visible={visible} transparent animationType='fade' onRequestClose={onClose} onShow={onShow}>
-      <Pressable
-        style={[styles.backdrop, { backgroundColor: backdrop ?? colors.scrim, paddingHorizontal: inset }]}
-        onPress={tapOutside ? onClose : undefined}
+      {/* Android does not resize a Modal for the keyboard, so the card is moved above it here. */}
+      <KeyboardAvoidingView
+        behavior='padding'
+        style={[styles.fill, { backgroundColor: backdrop ?? colors.scrim }]}
       >
-        {/* Inner pressable stops taps on the card from closing the popup. */}
-        <Pressable style={[styles.card, style]} onPress={() => {}}>
-          {children}
+        <Pressable
+          style={[styles.backdrop, { paddingHorizontal: inset }]}
+          onPress={tapOutside ? onClose : undefined}
+        >
+          {/* Inner pressable stops taps on the card from closing the popup. */}
+          <Pressable style={[styles.card, style]} onPress={() => {}}>
+            {children}
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
+    fill: { flex: 1 },
     backdrop: { flex: 1, justifyContent: 'center' },
     card: {
       backgroundColor: c.card,
